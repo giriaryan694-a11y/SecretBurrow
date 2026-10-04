@@ -1,0 +1,2317 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SecretBurrow is a client-side firmware and source-code secret scanner.">
+    <title>SecretBurrow | Firmware & Code Secret Scanner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- ZIP extraction stays client-side. No uploaded archive is sent to a server. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lzma-wasm@1.0.7/dist/iife/index.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/filing@0.1.2/dist/umd/filing.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        :root {
+            --bg-base: #09090b;
+            --bg-surface: #18181b;
+            --bg-elevated: #27272a;
+            --border-subtle: #3f3f46;
+            --border-strong: #52525b;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --accent: #10b981;
+            --accent-glow: rgba(16, 185, 129, 0.2);
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            --warning: #f59e0b;
+            --info: #60a5fa;
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            --radius: 8px;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html.light {
+            --bg-base: #fafafa;
+            --bg-surface: #ffffff;
+            --bg-elevated: #f4f4f5;
+            --border-subtle: #e4e4e7;
+            --border-strong: #d4d4d8;
+            --text-primary: #18181b;
+            --text-secondary: #71717a;
+            --danger-bg: rgba(239, 68, 68, 0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        header {
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            background: var(--bg-surface);
+            backdrop-filter: blur(8px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-wrap { display: flex; flex-direction: column; gap: 0.35rem; }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.02em;
+            flex-wrap: wrap;
+        }
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: 800;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+        .creator-credit {
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding-left: 44px;
+            letter-spacing: 0.01em;
+        }
+        .creator-credit strong { color: var(--accent); font-weight: 700; }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+
+        .icon-btn {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            transition: var(--transition);
+        }
+        .icon-btn:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-strong); }
+
+        main {
+            flex: 1;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        @media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) {
+            header { padding: 0.9rem 1rem; }
+            main { padding: 1rem; gap: 1rem; }
+            .creator-credit { padding-left: 0; }
+        }
+
+        .panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            min-width: 0;
+            height: fit-content;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .badge {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 99px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge.danger { background: var(--danger-bg); color: var(--danger); border-color: rgba(239, 68, 68, 0.2); }
+        .badge.success { background: rgba(16, 185, 129, 0.08); color: var(--accent); border-color: rgba(16, 185, 129, 0.2); }
+
+        .tab-bar {
+            display: flex;
+            background: var(--bg-base);
+            border-radius: var(--radius);
+            padding: 4px;
+            border: 1px solid var(--border-subtle);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: var(--font-ui);
+        }
+        .tab-btn.active { background: var(--bg-elevated); color: var(--accent); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .dropzone {
+            border: 2px dashed var(--border-strong);
+            border-radius: var(--radius);
+            padding: 2.7rem 2rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--bg-base);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .dropzone:hover, .dropzone.is-dragover { border-color: var(--accent); background: rgba(16, 185, 129, 0.03); }
+        .dropzone.is-dragover { box-shadow: 0 0 0 4px var(--accent-glow); transform: scale(1.005); }
+        .dropzone-icon { width: 48px; height: 48px; color: var(--text-secondary); transition: var(--transition); }
+        .dropzone:hover .dropzone-icon, .dropzone.is-dragover .dropzone-icon { color: var(--accent); transform: translateY(-4px); }
+        .dropzone-text { font-size: 0.95rem; color: var(--text-secondary); }
+        .dropzone-text strong { color: var(--accent); font-weight: 600; }
+        .dropzone-subtext { font-size: 0.8rem; color: var(--text-secondary); opacity: 0.7; }
+        .file-input-hidden { display: none; }
+        .browse-row { display: flex; gap: 0.65rem; flex-wrap: wrap; justify-content: center; }
+        .browse-btn {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 7px;
+            padding: 0.55rem 0.8rem;
+            font: 600 0.78rem var(--font-ui);
+            cursor: pointer;
+        }
+        .browse-btn:hover { border-color: var(--border-strong); }
+
+        .progress-wrap {
+            display: grid;
+            gap: 0.55rem;
+        }
+        .progress-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            color: var(--text-secondary);
+            font: 600 0.75rem var(--font-mono);
+        }
+        .progress-track {
+            height: 10px;
+            border-radius: 999px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--accent), #34d399);
+            transition: width 0.15s ease;
+        }
+
+        .verbose-control {
+            display: grid;
+            grid-template-columns: auto auto;
+            align-items: center;
+            gap: 0.35rem 0.5rem;
+            padding: 0.75rem 0.9rem;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            background: var(--bg-base);
+            font: 600 0.76rem var(--font-mono);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .verbose-control input { width: 15px; height: 15px; accent-color: var(--accent); }
+        .verbose-control small { grid-column: 2; color: var(--text-secondary); font: 500 0.68rem/1.4 var(--font-ui); }
+
+        .terminal {
+            background: #050506;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            min-height: 190px;
+            max-height: 240px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        html.light .terminal { background: #111113; }
+        .terminal-bar {
+            padding: 0.7rem 0.9rem;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            color: #d4d4d8;
+            font: 700 0.72rem var(--font-mono);
+        }
+        .terminal-actions { display: flex; align-items: center; gap: 0.7rem; }
+        .verbose-toggle { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; color: #a1a1aa; user-select: none; font: 700 0.68rem var(--font-mono); }
+        .verbose-toggle input { accent-color: var(--accent); cursor: pointer; }
+        .verbose-toggle:has(input:checked) { color: var(--accent); }
+        .terminal-clear { background: transparent; border: 1px solid #3f3f46; border-radius: 5px; color: #a1a1aa; padding: 0.2rem 0.4rem; cursor: pointer; font: 700 0.62rem var(--font-mono); }
+        .terminal-clear:hover { color: #fafafa; border-color: #71717a; }
+
+        .terminal-dots { display: flex; gap: 0.35rem; }
+        .terminal-dot { width: 8px; height: 8px; border-radius: 50%; background: #52525b; }
+        .terminal-dot.live { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+        .terminal-output {
+            padding: 0.85rem;
+            overflow-y: auto;
+            flex: 1;
+            color: #a7f3d0;
+            font: 500 0.72rem/1.7 var(--font-mono);
+        }
+        .terminal-line { white-space: pre-wrap; word-break: break-word; }
+        .terminal-line .time { color: #71717a; }
+        .terminal-line.info { color: #bfdbfe; }
+        .terminal-line.success { color: #a7f3d0; }
+        .terminal-line.warn { color: #fde68a; }
+        .terminal-line.error { color: #fca5a5; }
+
+        .selected-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.75rem 0.9rem;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-base);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            font: 600 0.75rem var(--font-mono);
+        }
+        .selected-summary strong { color: var(--text-primary); }
+
+        .btn {
+            padding: 0.85rem 1.5rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            font-family: var(--font-ui);
+        }
+        .btn-primary { background: var(--accent); color: #000; box-shadow: 0 4px 12px var(--accent-glow); }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .scanning-indicator { display: flex; align-items: center; gap: 0.5rem; color: #000; font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700; }
+        .pulse { width: 8px; height: 8px; background: #000; border-radius: 50%; animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0,0,0,0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+        }
+
+        .findings-toolbar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.7rem;
+            align-items: center;
+        }
+        .findings-search {
+            width: 100%;
+            min-width: 0;
+            padding: 0.72rem 0.85rem;
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font: 500 0.78rem var(--font-mono);
+        }
+        .findings-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .export-wrap { position: relative; }
+        .export-btn {
+            white-space: nowrap;
+            padding: 0.72rem 0.9rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font: 700 0.76rem var(--font-mono);
+            cursor: pointer;
+        }
+        .export-btn:hover { border-color: var(--border-strong); }
+        .export-menu {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            z-index: 50;
+            min-width: 180px;
+            padding: 0.45rem;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            box-shadow: 0 14px 35px rgba(0,0,0,0.25);
+            display: none;
+        }
+        .export-menu.active { display: grid; }
+        .export-item {
+            border: 0;
+            background: transparent;
+            color: var(--text-primary);
+            text-align: left;
+            padding: 0.55rem 0.65rem;
+            border-radius: 6px;
+            font: 600 0.75rem var(--font-mono);
+            cursor: pointer;
+        }
+        .export-item:hover { background: var(--bg-elevated); color: var(--accent); }
+        .findings-meta {
+            color: var(--text-secondary);
+            font: 600 0.68rem var(--font-mono);
+            margin-top: -0.55rem;
+        }
+        @media (max-width: 640px) {
+            .findings-toolbar { grid-template-columns: 1fr; }
+            .export-btn { width: 100%; }
+            .export-menu { left: 0; right: 0; }
+        }
+
+        .results-container {
+            min-height: 400px;
+            max-height: 70vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-right: 0.5rem;
+        }
+        .results-container::-webkit-scrollbar { width: 6px; }
+        .results-container::-webkit-scrollbar-track { background: transparent; }
+        .results-container::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+        .empty-state {
+            flex: 1;
+            min-height: 360px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 2rem;
+        }
+        .result-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            animation: slideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            border-left: 3px solid var(--danger);
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+        .result-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.75rem; }
+        .result-type { font-family: var(--font-mono); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; color: var(--danger); background: var(--danger-bg); padding: 0.2rem 0.6rem; border-radius: 4px; }
+        .result-meta { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-secondary); text-align: right; }
+        .result-match { font-family: var(--font-mono); font-size: 0.88rem; font-weight: 600; color: var(--text-primary); background: var(--bg-base); padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 0.75rem; word-break: break-all; border: 1px solid var(--border-subtle); }
+        .result-context { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); background: var(--bg-base); padding: 0.75rem; border-radius: 4px; border-left: 2px solid var(--border-strong); white-space: pre-wrap; max-height: 100px; overflow: hidden; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; width: 90%; max-width: 600px; max-height: 85vh; overflow-y: auto; padding: 2rem; transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.16,1,0.3,1); }
+        .modal-overlay.active .modal { transform: scale(1); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .modal-title { font-size: 1.25rem; font-weight: 700; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary); font-size: 0.9rem; }
+        select, .patterns-box { width: 100%; padding: 0.75rem; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius); color: var(--text-primary); font-family: var(--font-ui); }
+        .patterns-box { height: 250px; resize: vertical; font: 500 0.8rem/1.5 var(--font-mono); }
+        .btn-group { display: flex; gap: 1rem; margin-top: 2rem; }
+        .btn-secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+        .btn-secondary:hover { background: var(--border-subtle); }
+
+        footer {
+            text-align: center;
+            padding: 1.5rem 2rem 2rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            border-top: 1px solid var(--border-subtle);
+            margin-top: auto;
+        }
+        footer strong { color: var(--accent); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand-wrap">
+            <div class="logo">
+                <div class="logo-icon">SB</div>
+                <span>SecretBurrow</span>
+                <span class="badge success">SANDBOXED</span>
+            </div>
+            <div class="creator-credit">Made By <strong>Aryan Giri</strong> | <strong>giriaryan694-a11y</strong></div>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" id="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">🌓</button>
+            <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="panel">
+            <div class="panel-header">
+                <div class="panel-title">📂 Target Firmware / Source</div>
+                <div id="engine-status" class="badge">IDLE</div>
+            </div>
+
+            <div class="tab-bar">
+                <button class="tab-btn active" data-mode="code">Code Repo Mode</button>
+                <button class="tab-btn" data-mode="firmware">Firmware Mode</button>
+            </div>
+
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload files, folders, or zip archives">
+                <svg class="dropzone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <div class="dropzone-text">Drag & drop a repository, firmware dump, folder, or <strong>ZIP archive</strong></div>
+                <div class="dropzone-subtext" id="mode-subtext">Optimized for source/config files, .zip repositories, and text-bearing assets</div>
+                <div class="browse-row">
+                    <button class="browse-btn" id="browse-files" type="button">Browse Files</button>
+                    <button class="browse-btn" id="browse-folder" type="button">Browse Folder</button>
+                </div>
+                <input type="file" class="file-input-hidden" id="file-input" multiple>
+                <input type="file" class="file-input-hidden" id="folder-input" multiple webkitdirectory directory>
+            </div>
+
+            <div class="selected-summary" id="selected-summary">
+                <span>Targets loaded</span>
+                <strong id="file-count">0 files</strong>
+            </div>
+
+            <div class="progress-wrap">
+                <div class="progress-meta">
+                    <span id="progress-label">Waiting for input</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="progress-track" aria-label="Scan progress">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </div>
+
+            <div class="terminal" aria-live="polite">
+                <div class="terminal-bar">
+                    <span>STATUS TERMINAL</span>
+                    <div class="terminal-actions">
+                        <label class="verbose-toggle" title="Show directories, every file, archive extraction, decoding, hashes and worker activity">
+                            <input type="checkbox" id="verbose-toggle">
+                            <span>VERBOSE</span>
+                        </label>
+                        <button class="terminal-clear" id="terminal-clear" type="button">CLEAR</button>
+                        <div class="terminal-dots" aria-hidden="true">
+                            <span class="terminal-dot live"></span>
+                            <span class="terminal-dot"></span>
+                            <span class="terminal-dot"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="terminal-output" id="terminal-output"></div>
+            </div>
+
+            <button id="scan-btn" class="btn btn-primary" disabled>
+                <span id="scan-text">Initiate Deep Scan</span>
+                <div id="scan-indicator" class="scanning-indicator hidden">
+                    <div class="pulse"></div>
+                    <span>Scanning...</span>
+                </div>
+            </button>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <div class="panel-title">🚨 Findings</div>
+                <div id="result-count" class="badge">0 FINDINGS</div>
+            </div>
+
+            <div class="findings-toolbar">
+                <input id="findings-search" class="findings-search" type="search" placeholder="Search findings, file, type, encoding, hash, offset..." aria-label="Search findings">
+                <div class="export-wrap">
+                    <button id="export-btn" class="export-btn" type="button" aria-haspopup="true" aria-expanded="false">EXPORT ▾</button>
+                    <div id="export-menu" class="export-menu">
+                        <button class="export-item" data-export="csv" type="button">CSV</button>
+                        <button class="export-item" data-export="sql" type="button">SQL INSERTS</button>
+                        <button class="export-item" data-export="md" type="button">MARKDOWN</button>
+                        <button class="export-item" data-export="txt" type="button">PLAIN TEXT</button>
+                        <button class="export-item" data-export="json" type="button">JSON</button>
+                        <button class="export-item" data-export="pdf" type="button">PDF</button>
+                    </div>
+                </div>
+            </div>
+            <div id="findings-meta" class="findings-meta">0 findings shown</div>
+
+            <div class="results-container" id="results-container">
+                <div class="empty-state">
+                    <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--border-strong); margin-bottom: 1rem;" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                    <p>No exposures detected.</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Drop a target above to begin client-side analysis.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Engine Configuration (<span id="modal-mode-label">Code Repo</span>)</div>
+                <button class="icon-btn" id="close-modal" aria-label="Close settings">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Theme Preference</label>
+                <select id="theme-select">
+                    <option value="dark">Dark Mode (Default)</option>
+                    <option value="light">Light Mode</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Import Custom Wordlist (JSON)</label>
+                <div class="dropzone" id="pattern-dropzone" style="padding: 1.5rem; margin-bottom: 0.5rem;">
+                    <div class="dropzone-text" style="font-size: 0.85rem;">Drop <strong>JSON file</strong> here or click to upload</div>
+                    <input type="file" class="file-input-hidden" id="pattern-input" accept=".json,application/json">
+                </div>
+                <small style="color: var(--text-secondary); font-family: var(--font-mono);">Format: [{"name":"...","regex":"...","flags":"..."}]</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Active Regex Patterns</label>
+                <textarea id="patterns-input" class="patterns-box"></textarea>
+            </div>
+
+            <div class="btn-group">
+                <button id="save-settings" class="btn btn-primary" style="flex: 1;">Apply & Save</button>
+                <button id="reset-settings" class="btn btn-secondary" style="flex: 1; color: var(--danger);">Reset Defaults</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        Made By <strong>Aryan Giri</strong> | <strong>giriaryan694-a11y</strong> | Universal Analysis Engine
+    </footer>
+
+    <script>
+        const CODE_REPO_PATTERNS = [
+            { name: "Generic API Key/Secret", regex: "(?:api[\\_-]?key|apikey|secret|password|passwd|pwd|token|auth|credential|access[\\_-]?key|client_secret|private_key|connection_string|db_pass|database_url|bearer)\\s*[=:]\\s*['\\\"]?([^'\\\"\\s,;]{6,})['\\\"]?", flags: "gi" },
+            { name: "AWS Access Key", regex: "\\b(?:A3T8AWJ2V73QXZ|AKIA)[A-Z0-9]{16}\\b", flags: "g" },
+            { name: "AWS Secret Key", regex: "(?:aws_secret_access_key|aws_secret_key)\\s*[:=]\\s*['\\\"]?([A-Za-z0-9/+=]{40})['\\\"]?", flags: "gi" },
+            { name: "GitHub Token", regex: "\\b(?:ghp_[0-9A-Za-z]{36}|github_pat_[0-9A-Za-z_]{80,})\\b", flags: "g" },
+            { name: "OpenAI API Key", regex: "\\b(?:sk-[A-Za-z0-9]{20,}|sk-proj-[A-Za-z0-9]{20,})\\b", flags: "g" },
+            { name: "Slack Token", regex: "\\bxox[baprs]-[0-9A-Za-z-]{20,}\\b", flags: "g" },
+            { name: "Stripe Secret Key", regex: "\\bsk_live_[0-9A-Za-z]{24,}\\b", flags: "g" },
+            { name: "Google API Key", regex: "\\bAIza[0-9A-Za-z_-]{35}\\b", flags: "g" },
+            { name: "Mailgun API Key", regex: "\\bkey-[0-9A-Za-z]{32}\\b", flags: "g" },
+            { name: "Twilio API Key", regex: "\\bSK[0-9a-fA-F]{32}\\b", flags: "g" },
+            { name: "Private Key Header", regex: "-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", flags: "g" },
+            { name: "JWT Token", regex: "\\beyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", flags: "g" },
+            { name: "URL with Credentials", regex: "https?://[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
+            { name: "Database Connection String", regex: "(?:mongodb|postgres(?:ql)?|mysql|redis|amqp|mssql):\\/\\/[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
+            { name: ".env Variable", regex: "^[A-Z_0-9]+=[^\\n]{8,}$", flags: "gm" },
+            { name: "SSH / Telnet Credential Pair", regex: "\\b(?:root|admin|user)\\s*[:|/]\\s*[^\\s:]{4,}\\b", flags: "gi" },
+            { name: "Cloud Credential Assignment", regex: "(?:aws_access_key_id|aws_secret_access_key|azure_client_secret|azure_storage_key|gcp_credentials|google_application_credentials|client_secret)\s*[:=]\s*['\"]?[^'\"\s]{6,}", flags: "gi" },
+            { name: "Private Key Material", regex: "-----BEGIN (?:[A-Z0-9]+ )?(?:ENCRYPTED )?PRIVATE KEY-----", flags: "g" },
+            { name: "Password Hash Marker", regex: "(?:bcrypt|argon2|scrypt|pbkdf2|sha(?:1|224|256|384|512)|md5)\\s*[:$=]\\s*[^\\s]{6,}", flags: "gi" },
+            { name: "Encryption / Cipher Configuration", regex: "(?:aes(?:[-_]?128|[-_]?192|[-_]?256)?(?:[-_]?gcm|[-_]?cbc|[-_]?ctr)?|chacha20(?:[-_]?poly1305)?|rsa(?:[-_]?oaep)?|fernet|openssl)\\s*[:=_-]?\\s*[^\\s]{0,80}", flags: "gi" },
+            { name: "Encoded Blob Assignment", regex: "(?:base64|base64url|base32|hex|encoded|obfuscated)\\s*[:=]\\s*[^\\s]{12,}", flags: "gi" },
+            { name: "Docker Registry Credential", regex: "(?:auth|username|password)\\s*[:=]\\s*[^\\s]{6,}.*(?:registry|docker|index)", flags: "gi" },
+            { name: "Package Registry Token", regex: "(?:NPM_TOKEN|NODE_AUTH_TOKEN|PYPI_TOKEN|TWINE_PASSWORD|GITLAB_TOKEN|CI_JOB_TOKEN|REGISTRY_PASSWORD)\\s*[:=]\\s*[^\\s]{6,}", flags: "gi" }
+
+        ];
+
+        const FIRMWARE_PATTERNS = [
+            { name: "WiFi / WPA Credentials", regex: "(?:wifi[\\_-]?pass|wifi[\\_-]?password|wpa[\\_-]?psk|ap[\\_-]?password|wifi[\\_-]?key|wlan[\\_-]?pass)\\s*[=:]\\s*['\\\"]?([^\\s'\\\"]{8,})['\\\"]?", flags: "gi" },
+            { name: "MQTT / Broker Creds", regex: "(?:mqtt[\\_-]?(?:pass|password|user|pwd|key)|broker[\\_-]?(?:pass|password|user))\\s*[=:]\\s*['\\\"]?([^\\s'\\\"]{3,})['\\\"]?", flags: "gi" },
+            { name: "Root / Telnet / SSH Pass", regex: "(?:root[\\_-]?(?:password|pass|pwd)|telnet[\\_-]?(?:pass|password)|ssh[\\_-]?(?:pass|password)|admin[\\_-]?(?:pwd|pass|password)|login[\\_-]?(?:pass|password))\\s*[=:]\\s*['\\\"]?([^\\s'\\\"]{4,})['\\\"]?", flags: "gi" },
+            { name: "Credential Assignment", regex: "(?:password|passwd|pwd|secret|token|credential|auth|api[_-]?key)\\s*[=:]\\s*['\\\"]?([^\\s'\\\"]{6,})['\\\"]?", flags: "gi" },
+            { name: "Credential Pair", regex: "\\b(?:admin|root|guest|user)\\s*[:|]\\s*([^\\s:#]{4,})\\b", flags: "gi" },
+            { name: "Default Password Marker", regex: "(?:G_DEF_PASSWORD|DEF_PASSWORD|DEFAULT_PASSWORD|default_password|httpasswd|http_passwd|http_password)\\s*[=:]\\s*[^\\s]{3,}", flags: "gi" },
+            { name: "Firmware Identity / Secret", regex: "(?:image_sign|serial_number|device_password|admin_password|web_password|telnet_password)\\s*[=:]\\s*[^\\s]{3,}", flags: "gi" },
+            { name: "D-Link / AlphaNetworks Marker", regex: "(?:Alphanetworks|WRGG19|dlwbr|image_sign|\\$G_DEF_PASSWORD|\\$image_sign)", flags: "gi" },
+            { name: "Credential File Reference", regex: "(?:/etc/(?:passwd|shadow|group|httpasswd|config)|/var/(?:config|etc)/[^\\s]{3,})", flags: "gi" },
+            { name: "Telnet / Debug Service", regex: "(?:telnetd|dropbear|sshd|httpd|uhttpd)\\b[^\\n]{0,180}", flags: "gi" },
+            { name: "Hardcoded IP:Port", regex: "\\b(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d):\\d{2,5}\\b", flags: "g" },
+            { name: "AWS Access Key", regex: "\\b(?:A3T8AWJ2V73QXZ|AKIA)[A-Z0-9]{16}\\b", flags: "g" },
+            { name: "Private Key Header", regex: "-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", flags: "g" },
+            { name: "URL with Credentials", regex: "https?://[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
+            { name: "MAC Address", regex: "(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}", flags: "g" }
+        ];
+
+        // --- Universal filesystem/container fingerprints ---
+        // Detection is intentionally broader than extraction. Unsupported filesystems are
+        // surfaced in the terminal instead of being silently ignored.
+        const FILESYSTEM_SIGNATURES = [
+            { name: 'SquashFS LE', test: (b) => b[0]===0x68&&b[1]===0x73&&b[2]===0x71&&b[3]===0x73, kind:'filesystem' },
+            { name: 'SquashFS BE', test: (b) => b[0]===0x73&&b[1]===0x71&&b[2]===0x73&&b[3]===0x68, kind:'filesystem' },
+            { name: 'CRAMFS', test: (b) => b[0]===0x45&&b[1]===0x3d&&b[2]===0xcd&&b[3]===0x28, kind:'filesystem' },
+            { name: 'ROMFS', test: (b) => asciiAt(b,0,'-rom1fs-'), kind:'filesystem' },
+            { name: 'JFFS2 LE marker', test: (b) => b[0]===0x85&&b[1]===0x19, kind:'filesystem' },
+            { name: 'JFFS2 BE marker', test: (b) => b[0]===0x19&&b[1]===0x85, kind:'filesystem' },
+            { name: 'UBI erase counter header', test: (b) => asciiAt(b,0,'UBI#'), kind:'container' },
+            { name: 'UBI volume header', test: (b) => asciiAt(b,0,'UBI!'), kind:'container' },
+            { name: 'UBIFS superblock', test: (b) => b[0]===0x31&&b[1]===0x18&&b[2]===0x10&&b[3]===0x06, kind:'filesystem' },
+            { name: 'F2FS superblock', test: (b) => b.length>0x404 && b[0x400]===0x10&&b[0x401]===0x20&&b[0x402]===0xf5&&b[0x403]===0xf2, kind:'filesystem' },
+            { name: 'NTFS', test: (b) => asciiAt(b,3,'NTFS    '), kind:'filesystem' },
+            { name: 'HFS+', test: (b) => b.length>1025 && ((b[1024]===0x48&&b[1025]===0x2b)||(b[1024]===0x48&&b[1025]===0x58)), kind:'filesystem' },
+            { name: 'APFS', test: (b) => asciiAt(b,32,'NXSB'), kind:'filesystem' },
+            { name: 'ISO9660', test: (b) => b.length>0x8006 && asciiAt(b,0x8001,'CD001'), kind:'filesystem' },
+            { name: 'FAT volume', test: (b) => asciiAt(b,54,'FAT12') || asciiAt(b,54,'FAT16') || asciiAt(b,82,'FAT32'), kind:'filesystem' },
+            { name: 'exFAT', test: (b) => asciiAt(b,3,'EXFAT   '), kind:'filesystem' },
+            { name: 'ELF', test: (b) => b[0]===0x7f&&b[1]===0x45&&b[2]===0x4c&&b[3]===0x46, kind:'binary' },
+            { name: 'PE/MZ', test: (b) => b[0]===0x4d&&b[1]===0x5a, kind:'binary' }
+        ];
+
+        function asciiAt(bytes, offset, text) {
+            if (offset < 0 || offset + text.length > bytes.length) return false;
+            for (let i=0;i<text.length;i++) if (bytes[offset+i] !== text.charCodeAt(i)) return false;
+            return true;
+        }
+
+        function detectFilesystemSignatures(bytes) {
+            const hits = [];
+            // Test the beginning first, then a capped carve scan so firmware-in-container
+            // filesystems are found even when the image has headers/padding before the FS.
+            for (const sig of FILESYSTEM_SIGNATURES) {
+                if (sig.test(bytes)) hits.push({ ...sig, offset: 0 });
+            }
+            const needles = [
+                [0x73,0x71,0x73,0x68,'SquashFS BE'],
+                [0x68,0x73,0x71,0x73,'SquashFS LE'],
+                [0x55,0x42,0x49,0x23,'UBI erase counter header'],
+                [0x55,0x42,0x49,0x21,'UBI volume header'],
+                [0x19,0x85,'JFFS2 BE marker'],
+                [0x85,0x19,'JFFS2 LE marker']
+            ];
+            const maxScan = Math.min(bytes.length, 256*1024*1024);
+            for (const [a0,a1,a2,a3,name] of needles) {
+                for (let i=0;i<maxScan-3;i++) {
+                    if (bytes[i]===a0 && bytes[i+1]===a1 && (a2===undefined || (bytes[i+2]===a2&&bytes[i+3]===a3))) {
+                        if (!hits.some(h=>h.name===name&&h.offset===i)) hits.push({name,kind:'filesystem',offset:i});
+                        break;
+                    }
+                }
+            }
+            return hits.sort((a,b)=>a.offset-b.offset).slice(0,64);
+        }
+
+        function le16(b,o){ return o+2<=b.length ? b[o] | (b[o+1]<<8) : 0; }
+        function le32(b,o){ return o+4<=b.length ? (b[o] | (b[o+1]<<8) | (b[o+2]<<16) | (b[o+3]<<24)) >>> 0 : 0; }
+        function le64Number(b,o){
+            if (o+8>b.length) return 0;
+            const lo=BigInt(le32(b,o)), hi=BigInt(le32(b,o+4));
+            const n=(hi<<32n)|lo;
+            return n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : Number.MAX_SAFE_INTEGER;
+        }
+        function printableNameBytes(b,o,n){
+            let s='';
+            for(let i=0;i<n && o+i<b.length;i++){
+                const c=b[o+i];
+                if(c<32||c>126) break;
+                s+=String.fromCharCode(c);
+            }
+            return s;
+        }
+
+        const EXT4_EXTENTS_FL = 0x80000;
+        const EXT4_EXT_MAGIC = 0xf30a;
+        const MAX_FS_FILES = 5000;
+        const MAX_FS_FILE_BYTES = 8 * 1024 * 1024;
+        const MAX_FS_EXTRACTED_BYTES = 96 * 1024 * 1024;
+
+        function extSuperblock(bytes, base=1024){
+            if(base+1024>bytes.length || le16(bytes,base+56)!==0xef53) return null;
+            const logBlock=le32(bytes,base+24);
+            const blockSize=1024 * Math.pow(2, Math.min(logBlock, 6));
+            const blocks=le32(bytes,base+4);
+            const firstData=le32(bytes,base+20);
+            const blocksPerGroup=le32(bytes,base+32);
+            const inodesPerGroup=le32(bytes,base+40);
+            const inodeSize=Math.max(128, le16(bytes,base+88)||128);
+            const featureIncompat=le32(bytes,base+96);
+            const descSize = le16(bytes,base+254) || 32;
+            return { base, blockSize, blocks, firstData, blocksPerGroup, inodesPerGroup, inodeSize, featureIncompat, descSize };
+        }
+
+        function extLocateInode(bytes, sb, ino){
+            if(!ino || !sb.inodesPerGroup) return null;
+            const group=Math.floor((ino-1)/sb.inodesPerGroup);
+            const index=(ino-1)%sb.inodesPerGroup;
+            const groups=Math.ceil(sb.blocks/sb.blocksPerGroup);
+            if(group>=groups) return null;
+            const gdt=(sb.firstData+1)*sb.blockSize;
+            const desc=Math.max(32, Math.min(sb.descSize, 1024));
+            const off=gdt + group*desc;
+            if(off+16>bytes.length) return null;
+            const tableLo=le32(bytes,off+8);
+            const tableHi=desc>=64?le32(bytes,off+40):0;
+            const table=tableLo + tableHi*0x100000000;
+            const pos=table*sb.blockSize + index*sb.inodeSize;
+            if(pos+sb.inodeSize>bytes.length) return null;
+            return pos;
+        }
+
+        function extExtentEntries(bytes, pos, depth=0, seen=new Set(), out=[]){
+            if(depth>5 || pos+12>bytes.length) return out;
+            const magic=le16(bytes,pos);
+            if(magic!==EXT4_EXT_MAGIC) return out;
+            const entries=Math.min(le16(bytes,pos+2), 128);
+            const treeDepth=le16(bytes,pos+6);
+            if(treeDepth===0){
+                for(let i=0;i<entries;i++){
+                    const e=pos+12+i*12;
+                    if(e+12>bytes.length) break;
+                    const logical=le32(bytes,e);
+                    const lenRaw=le16(bytes,e+4);
+                    const len=lenRaw & 0x7fff;
+                    const phys=(le16(bytes,e+6)*0x100000000)+le32(bytes,e+8);
+                    if(len && phys) out.push({logical,len,phys});
+                }
+                return out;
+            }
+            for(let i=0;i<entries;i++){
+                const e=pos+12+i*12;
+                if(e+12>bytes.length) break;
+                const child=le16(bytes,e+8)*0x100000000 + le32(bytes,e+4);
+                if(!child || seen.has(child)) continue;
+                seen.add(child);
+                extExtentEntries(bytes, child*CURRENT_EXT_BLOCK_SIZE, depth+1, seen, out);
+            }
+            return out;
+        }
+
+        let CURRENT_EXT_BLOCK_SIZE = 4096;
+
+        function extReadFile(bytes, sb, inodePos, maxBytes=MAX_FS_FILE_BYTES){
+            if(!inodePos) return new Uint8Array();
+            const mode=le16(bytes,inodePos);
+            const isDir=(mode & 0xf000)===0x4000;
+            const isRegular=(mode & 0xf000)===0x8000;
+            const sizeLo=le32(bytes,inodePos+4);
+            const sizeHi=isRegular && inodePos+112<=bytes.length ? le32(bytes,inodePos+108) : 0;
+            const size=Math.min(sizeLo + sizeHi*0x100000000, maxBytes);
+            if(size<=0 || (!isDir && !isRegular)) return new Uint8Array();
+            const flags=le32(bytes,inodePos+32);
+            const out=new Uint8Array(size);
+            const blocksNeeded=Math.ceil(size/sb.blockSize);
+            if((flags & EXT4_EXTENTS_FL) && le16(bytes,inodePos+40)===EXT4_EXT_MAGIC){
+                CURRENT_EXT_BLOCK_SIZE=sb.blockSize;
+                const extents=extExtentEntries(bytes,inodePos+40,0,new Set(),[]).sort((a,b)=>a.logical-b.logical);
+                for(const ex of extents){
+                    for(let k=0;k<ex.len;k++){
+                        const logical=ex.logical+k;
+                        if(logical>=blocksNeeded) break;
+                        const src=(ex.phys+k)*sb.blockSize;
+                        const dst=logical*sb.blockSize;
+                        if(src>=bytes.length||dst>=out.length) continue;
+                        const n=Math.min(sb.blockSize,out.length-dst,bytes.length-src);
+                        out.set(bytes.subarray(src,src+n),dst);
+                    }
+                }
+                return out;
+            }
+            // ext2/3-style direct blocks fallback. Indirect blocks are intentionally not
+            // followed here; the generic raw scanner still inspects the full image.
+            const direct=Math.min(12,blocksNeeded);
+            for(let i=0;i<direct;i++){
+                const block=le32(bytes,inodePos+40+i*4);
+                if(!block) continue;
+                const src=block*sb.blockSize, dst=i*sb.blockSize;
+                if(src>=bytes.length||dst>=out.length) continue;
+                out.set(bytes.subarray(src,Math.min(src+sb.blockSize,bytes.length)),dst);
+            }
+            return out;
+        }
+
+        function parseExtDir(bytes, data){
+            const entries=[]; let off=0;
+            while(off+8<=data.length && entries.length<MAX_FS_FILES){
+                const ino=le32(data,off), rec=le16(data,off+4), nameLen=data[off+6], type=data[off+7];
+                if(rec<8 || off+rec>data.length) break;
+                const name=printableNameBytes(data,off+8,Math.min(nameLen,255));
+                if(ino && name && name!=='.' && name!=='..') entries.push({ino,name,type});
+                off+=rec;
+            }
+            return entries;
+        }
+
+        async function extractExtFamily(bytes,label,generation,visited){
+            const sb=extSuperblock(bytes,1024);
+            if(!sb) return false;
+            logStatus(`${label}: EXT filesystem detected (block=${sb.blockSize}, inode=${sb.inodeSize}, groups=${Math.ceil(sb.blocks/sb.blocksPerGroup)}).`, 'success', true);
+            let totalBytes=0, count=0;
+            const seenInodes=new Set();
+            const walk=async(ino,path,depth)=>{
+                if(generation!==scanGeneration || depth>8 || count>=MAX_FS_FILES || totalBytes>=MAX_FS_EXTRACTED_BYTES || seenInodes.has(ino)) return;
+                seenInodes.add(ino);
+                const pos=extLocateInode(bytes,sb,ino);
+                if(!pos) return;
+                const mode=le16(bytes,pos);
+                const kind=mode & 0xf000;
+                const isDir=kind===0x4000;
+                const fileData=extReadFile(bytes,sb,pos,MAX_FS_FILE_BYTES);
+                if(isDir){
+                    const ents=parseExtDir(bytes,fileData);
+                    logStatus(`verbose:${label}: seeing directory ${path || '/' } (${ents.length} entries).`, 'verbose');
+                    for(const ent of ents){
+                        const childPath=(path?path+'/':'/')+ent.name;
+                        if(verbose) logStatus(`verbose:${label}: seeing ${childPath}`, 'verbose');
+                        await walk(ent.ino,childPath,depth+1);
+                        if(generation!==scanGeneration || count>=MAX_FS_FILES || totalBytes>=MAX_FS_EXTRACTED_BYTES) break;
+                    }
+                } else if(kind===0x8000){
+                    count++; totalBytes+=fileData.length;
+                    if(verbose) logStatus(`verbose:${label}: extracting ${path} (${fileData.length.toLocaleString()} bytes).`, 'verbose');
+                    if(fileData.length){
+                        await scanDerivedBuffer({name:`${label} :: ${path}`,data:fileData},generation,2,visited);
+                    }
+                }
+            };
+            await walk(2,'',0);
+            logStatus(`${label}: EXT walk complete. ${count} regular file${count===1?'':'s'} inspected, ${totalBytes.toLocaleString()} bytes extracted.`, 'success', true);
+            return true;
+        }
+
+        async function analyzeUniversalFilesystems(bytes,label,generation,visited,depth=0){
+            const hits=detectFilesystemSignatures(bytes);
+            for(const hit of hits){
+                logStatus(`${label}: detected ${hit.name} @ 0x${hit.offset.toString(16)}.`, 'info', true);
+            }
+            // EXT-family can be fully walked in-browser for common images.
+            const extHits = hits.filter(h=>h.name==='EXT').length;
+            const sb=extSuperblock(bytes,1024);
+            if(sb && depth <= 1){
+                await extractExtFamily(bytes,label,generation,visited);
+            }
+            const squash=hits.filter(h=>h.name.startsWith('SquashFS'));
+            if(squash.length){
+                logStatus(`${label}: SquashFS found. Standard FS metadata requires its matching compressor; raw/compressed probes will continue.`, 'warn', true);
+            }
+            const unsupported=hits.filter(h=>h.kind==='filesystem' && !h.name.startsWith('SquashFS') && !['EXT'].includes(h.name));
+            for(const u of unsupported.slice(0,20)) logStatus(`${label}: ${u.name} detected; no filesystem walker loaded, so raw carving remains enabled.`, 'warn', true);
+            return hits;
+        }
+
+        const DEFAULT_RAW_LZMA_PROBES = [
+            { lc: 3, lp: 0, pb: 2, dict: 0x10000 },
+            { lc: 3, lp: 0, pb: 2, dict: 0x400000 },
+            { lc: 3, lp: 0, pb: 2, dict: 0x100000 },
+            { lc: 2, lp: 0, pb: 2, dict: 0x10000 },
+            { lc: 4, lp: 0, pb: 2, dict: 0x10000 },
+            { lc: 3, lp: 1, pb: 2, dict: 0x10000 },
+            { lc: 3, lp: 0, pb: 4, dict: 0x10000 }
+        ];
+
+        const MAGIC_SIGNATURES = [
+            { bytes: [0x73,0x71,0x73,0x68], name: "SquashFS (big-endian magic)", kind: "filesystem" },
+            { bytes: [0x68,0x73,0x71,0x73], name: "SquashFS (little-endian magic)", kind: "filesystem" },
+            { bytes: [0x1f,0x8b], name: "GZIP stream", kind: "compression" },
+            { bytes: [0xfd,0x37,0x7a,0x58,0x5a,0x00], name: "XZ stream", kind: "compression" },
+            { bytes: [0x42,0x5a,0x68], name: "BZIP2 stream", kind: "compression" },
+            { bytes: [0x37,0x7a,0xbc,0xaf,0x27,0x1c], name: "7-Zip archive", kind: "archive" },
+            { bytes: [0x50,0x4b,0x03,0x04], name: "ZIP archive", kind: "archive" },
+            { bytes: [0x75,0x73,0x74,0x61,0x72], name: "uSTAR tar", kind: "archive" },
+            { bytes: [0x30,0x37,0x30,0x37,0x30,0x31], name: "CPIO newc", kind: "archive" },
+            { bytes: [0x30,0x37,0x30,0x37,0x30,0x32], name: "CPIO crc", kind: "archive" },
+            { bytes: [0x55,0x45,0x46,0x49], name: "UEFI-like container", kind: "container" },
+            { bytes: [0x7f,0x45,0x4c,0x46], name: "ELF binary", kind: "binary" },
+            { bytes: [0x4d,0x5a], name: "PE/MZ binary", kind: "binary" },
+            { bytes: [0x04,0x22,0x4d,0x18], name: "LZ4 frame", kind: "compression" },
+            { bytes: [0x28,0xb5,0x2f,0xfd], name: "Zstandard stream", kind: "compression" },
+            { bytes: [0x78,0x01], name: "Zlib/Deflate stream", kind: "compression" },
+            { bytes: [0x78,0x9c], name: "Zlib/Deflate stream", kind: "compression" },
+            { bytes: [0x78,0xda], name: "Zlib/Deflate stream", kind: "compression" },
+            { bytes: [0x46,0x57,0x53], name: "Flash/SWF marker", kind: "container" }
+        ];
+
+        let activeMode = 'code';
+        let currentPatterns = loadPatterns(activeMode);
+        let currentTheme = localStorage.getItem('theme') || 'dark';
+        let selectedFiles = [];
+        let totalFindings = 0;
+        let findings = [];
+        let findingKeys = new Set();
+        let findingsSearch = '';
+        let scanInProgress = false;
+        let scanGeneration = 0;
+        let verbose = localStorage.getItem('secretburrow_verbose') === '1';
+        let archiveExtractor = null;
+        let lzmaReadyPromise = null;
+        let bzip2ReadyPromise = null;
+        const MAX_EXPANDED_BYTES = 180 * 1024 * 1024;
+        const MAX_DECODE_BYTES = 12 * 1024 * 1024;
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const folderInput = document.getElementById('folder-input');
+        const resultsContainer = document.getElementById('results-container');
+        const resultCount = document.getElementById('result-count');
+        const modeSubtext = document.getElementById('mode-subtext');
+        const modalModeLabel = document.getElementById('modal-mode-label');
+        const engineStatus = document.getElementById('engine-status');
+        const scanBtn = document.getElementById('scan-btn');
+        const scanText = document.getElementById('scan-text');
+        const scanIndicator = document.getElementById('scan-indicator');
+        const progressBar = document.getElementById('progress-bar');
+        const progressLabel = document.getElementById('progress-label');
+        const progressPercent = document.getElementById('progress-percent');
+        const terminalOutput = document.getElementById('terminal-output');
+        const fileCount = document.getElementById('file-count');
+        const verboseToggle = document.getElementById('verbose-toggle');
+        const findingsSearchInput = document.getElementById('findings-search');
+        const findingsMeta = document.getElementById('findings-meta');
+        const exportBtn = document.getElementById('export-btn');
+        const exportMenu = document.getElementById('export-menu');
+
+        function loadPatterns(mode) {
+            try {
+                const stored = localStorage.getItem(`customPatterns_${mode}`);
+                if (!stored) return mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+                const parsed = JSON.parse(stored);
+                return Array.isArray(parsed) ? parsed : (mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS);
+            } catch {
+                return mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+            }
+        }
+
+        function nowTime() {
+            return new Date().toLocaleTimeString([], { hour12: false });
+        }
+
+        function logStatus(message, level = 'info', force = false) {
+            if (!force && !verbose && level === 'verbose') return;
+            const line = document.createElement('div');
+            line.className = `terminal-line ${level === 'verbose' ? 'info' : level}`;
+            const time = document.createElement('span');
+            time.className = 'time';
+            time.textContent = `[${nowTime()}] `;
+            line.append(time, document.createTextNode(message));
+            terminalOutput.appendChild(line);
+            while (terminalOutput.children.length > 500) terminalOutput.removeChild(terminalOutput.firstChild);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function setEngineStatus(label, state = 'idle') {
+            engineStatus.textContent = label;
+            engineStatus.className = 'badge';
+            if (state === 'success') engineStatus.classList.add('success');
+            if (state === 'danger') engineStatus.classList.add('danger');
+        }
+
+        function setProgress(value, label) {
+            const safe = Math.max(0, Math.min(100, value));
+            progressBar.style.width = `${safe}%`;
+            progressPercent.textContent = `${Math.round(safe)}%`;
+            progressLabel.textContent = label;
+        }
+
+        function updateFileSummary() {
+            fileCount.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'}`;
+            scanBtn.disabled = selectedFiles.length === 0 || scanInProgress;
+        }
+
+        function resetResults() {
+            totalFindings = 0;
+            findings = [];
+            findingKeys = new Set();
+            resultCount.textContent = '0 FINDINGS';
+            resultCount.classList.remove('danger');
+            renderFindings();
+        }
+
+        function normalizedFinding(result) {
+            return {
+                type: result.type || 'Unknown',
+                category: result.category || inferFindingCategory(result.type || ''),
+                severity: result.severity || inferFindingSeverity(result.type || ''),
+                match: String(result.match ?? ''),
+                line: Number.isFinite(result.line) ? result.line : 0,
+                offset: Number.isFinite(result.offset) ? result.offset : 0,
+                context: String(result.context ?? ''),
+                file: String(result.file ?? ''),
+                encoding: String(result.encoding || ''),
+                note: String(result.note || '')
+            };
+        }
+
+        function inferFindingCategory(type) {
+            const t = type.toLowerCase();
+            if (/hash|md5|sha|bcrypt|argon|scrypt|pbkdf/.test(t)) return 'Hash / Password Derivation';
+            if (/base64|base32|hex|encoding|unicode|percent|decoded/.test(t)) return 'Encoding / Obfuscation';
+            if (/encrypt|cipher|jwe|pgp|sealed|salted|high-entropy/.test(t)) return 'Encryption / High Entropy';
+            if (/key|secret|password|credential|token|auth|cookie/.test(t)) return 'Secret / Credential';
+            return 'Artifact / Indicator';
+        }
+
+        function inferFindingSeverity(type) {
+            const t = type.toLowerCase();
+            if (/private key|password|credential|token|aws|github|openai|stripe|database|url with credentials|root|telnet/.test(t)) return 'high';
+            if (/encrypt|high-entropy|hash|base64|base32|hex|encoding/.test(t)) return 'medium';
+            return 'low';
+        }
+
+        function addResult(result) {
+            const item = normalizedFinding(result);
+            const dedupeKey = [item.type, item.file, item.encoding, item.offset, item.match].join('|');
+            if (findingKeys.has(dedupeKey)) return;
+            findingKeys.add(dedupeKey);
+            findings.push(item);
+            totalFindings = findings.length;
+            resultCount.textContent = `${totalFindings} FINDING${totalFindings === 1 ? '' : 'S'}`;
+            resultCount.classList.add('danger');
+            renderFindings();
+        }
+
+        function getVisibleFindings() {
+            const q = findingsSearch.trim().toLowerCase();
+            if (!q) return findings;
+            return findings.filter(r => [r.type, r.category, r.severity, r.match, r.context, r.file, r.encoding, r.note, r.line, r.offset]
+                .join(' ').toLowerCase().includes(q));
+        }
+
+        function renderFindings() {
+            const visible = getVisibleFindings();
+            findingsMeta.textContent = `${visible.length} of ${findings.length} finding${findings.length === 1 ? '' : 's'} shown`;
+            if (!visible.length) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--border-strong); margin-bottom: 1rem;" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        <p>${findings.length ? 'No findings match your search.' : 'No findings detected.'}</p>
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">${findings.length ? 'Try a file name, type, encoding, hash or keyword.' : 'Drop a target above to begin client-side analysis.'}</p>
+                    </div>`;
+                return;
+            }
+            const frag = document.createDocumentFragment();
+            visible.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                const header = document.createElement('div');
+                header.className = 'result-header';
+                const type = document.createElement('span');
+                type.className = 'result-type';
+                type.textContent = result.type;
+                const meta = document.createElement('span');
+                meta.className = 'result-meta';
+                const location = result.line ? `Line ${result.line}` : `Offset 0x${result.offset.toString(16)}`;
+                meta.textContent = `${location} • ${result.file}`;
+                header.append(type, meta);
+
+                const match = document.createElement('div');
+                match.className = 'result-match';
+                match.textContent = result.match;
+                const context = document.createElement('div');
+                context.className = 'result-context';
+                context.textContent = result.context || result.note || '';
+                card.append(header, match, context);
+                frag.appendChild(card);
+            });
+            resultsContainer.replaceChildren(frag);
+        }
+
+        function createWorker() {
+            const workerSource = `
+                const WORKER_MAX_RESULTS = 6000;
+                const WORKER_MAX_RESULTS_PER_PATTERN = 180;
+                const WORKER_MAX_ERRORS = 100;
+                const WORKER_MAX_STRINGS = 24000;
+                const WORKER_MAX_DECODED_CANDIDATES = 2500;
+                const WORKER_TEXT_CHUNK = 262144;
+                const WORKER_TEXT_OVERLAP = 4096;
+                const WORKER_MAX_STRING_SCAN = 750000;
+                const WORKER_MAX_RECOVERY_SCAN = 320000;
+                const WORKER_MAX_TEXT_CANDIDATE = 180000;
+
+                function postSafe(payload) {
+                    try { self.postMessage(payload); }
+                    catch (err) {
+                        try { self.postMessage({ taskId: payload?.taskId, fatal: true, fatalError: 'postMessage failed: ' + err.message }); } catch (_) {}
+                    }
+                }
+
+                self.addEventListener('error', event => {
+                    // Keep diagnostics inside the worker. The parent also receives the ErrorEvent.
+                    try { postSafe({ fatal: true, fatalError: event?.message || 'Worker runtime error' }); } catch (_) {}
+                });
+                self.addEventListener('unhandledrejection', event => {
+                    try { postSafe({ fatal: true, fatalError: 'Unhandled rejection: ' + (event?.reason?.message || String(event?.reason || 'unknown')) }); } catch (_) {}
+                });
+
+                function isRiskyRegex(source) {
+                    if (typeof source !== 'string' || source.length > 3000) return true;
+                    // Conservative ReDoS guard without relying on a complex regex literal.
+                    // Reject only groups containing an unbounded quantifier which are themselves quantified.
+                    for (let i = 0; i < source.length - 1; i++) {
+                        if (source[i] !== ')' || (source[i + 1] !== '*' && source[i + 1] !== '+')) continue;
+                        const open = source.lastIndexOf('(', i);
+                        if (open < 0) continue;
+                        const body = source.slice(open + 1, i);
+                        if (body.includes('*') || body.includes('+') || body.includes('{')) return true;
+                    }
+                    return false;
+                }
+
+                function asciiStrings(bytes, minLen, emit) {
+                    let start = -1, count = 0;
+                    for (let i = 0; i < bytes.length; i++) {
+                        const b = bytes[i];
+                        const printable = (b >= 32 && b <= 126) || b === 9;
+                        if (printable) { if (start === -1) start = i; }
+                        else if (start !== -1) {
+                            if (i - start >= minLen) { emit({ text: new TextDecoder().decode(bytes.subarray(start, i)), offset: start, encoding: 'ASCII' }); count++; }
+                            start = -1;
+                            if (count >= WORKER_MAX_STRINGS) return count;
+                        }
+                    }
+                    if (start !== -1 && bytes.length - start >= minLen && count < WORKER_MAX_STRINGS) emit({ text: new TextDecoder().decode(bytes.subarray(start)), offset: start, encoding: 'ASCII' });
+                    return Math.min(count + (start !== -1 ? 1 : 0), WORKER_MAX_STRINGS);
+                }
+
+                function utf16Strings(bytes, little, minLen, emit, cap = WORKER_MAX_STRINGS) {
+                    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                    let total = 0;
+                    for (const alignment of [0, 1]) {
+                        let chars = []; let start = -1;
+                        for (let i = alignment; i + 1 < bytes.length; i += 2) {
+                            const c = little ? dv.getUint16(i, true) : dv.getUint16(i, false);
+                            const printable = c >= 32 && c <= 126;
+                            if (printable) { if (start === -1) start = i; chars.push(String.fromCharCode(c)); }
+                            else if (start !== -1) {
+                                if (chars.length >= minLen) { emit({ text: chars.join(''), offset: start, encoding: little ? 'UTF-16LE' : 'UTF-16BE' }); total++; }
+                                chars = []; start = -1;
+                                if (total >= cap) return total;
+                            }
+                        }
+                        if (chars.length >= minLen && start !== -1 && total < cap) { emit({ text: chars.join(''), offset: start, encoding: little ? 'UTF-16LE' : 'UTF-16BE' }); total++; }
+                    }
+                    return total;
+                }
+
+                function utf32Strings(bytes, little, minLen, emit, cap = 8000) {
+                    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                    let total = 0;
+                    for (const alignment of [0, 1, 2, 3]) {
+                        let chars = []; let start = -1;
+                        for (let i = alignment; i + 3 < bytes.length; i += 4) {
+                            const c = little ? dv.getUint32(i, true) : dv.getUint32(i, false);
+                            const printable = c >= 32 && c <= 126;
+                            if (printable) { if (start === -1) start = i; chars.push(String.fromCharCode(c)); }
+                            else if (start !== -1) {
+                                if (chars.length >= minLen) { emit({ text: chars.join(''), offset: start, encoding: little ? 'UTF-32LE' : 'UTF-32BE' }); total++; }
+                                chars = []; start = -1;
+                                if (total >= cap) return total;
+                            }
+                        }
+                        if (chars.length >= minLen && start !== -1 && total < cap) { emit({ text: chars.join(''), offset: start, encoding: little ? 'UTF-32LE' : 'UTF-32BE' }); total++; }
+                    }
+                    return total;
+                }
+
+                function entropy(bytes) {
+                    if (!bytes.length) return 0;
+                    const counts = new Uint32Array(256);
+                    for (const b of bytes) counts[b]++;
+                    let e = 0;
+                    for (const n of counts) if (n) { const p = n / bytes.length; e -= p * Math.log2(p); }
+                    return e;
+                }
+
+                function makeLineIndex(text) {
+                    const starts = [0];
+                    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) starts.push(i + 1);
+                    return starts;
+                }
+
+                function lineNumberAt(starts, index) {
+                    let lo = 0, hi = starts.length - 1;
+                    while (lo <= hi) {
+                        const mid = (lo + hi) >> 1;
+                        if (starts[mid] <= index) lo = mid + 1;
+                        else hi = mid - 1;
+                    }
+                    return hi + 1;
+                }
+
+                function addResultCapped(results, r) {
+                    if (results.length < WORKER_MAX_RESULTS) results.push(r);
+                }
+
+                function scanText(text, fileName, patterns, offsetBase, encoding, results, errors) {
+                    const scanText = text.length > WORKER_MAX_STRING_SCAN ? text.slice(0, WORKER_MAX_STRING_SCAN) : text;
+                    const lineStarts = makeLineIndex(scanText);
+                    for (const p of patterns) {
+                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        if (isRiskyRegex(p.regex)) {
+                            if (errors.length < WORKER_MAX_ERRORS) errors.push((p.name || 'unnamed') + ': skipped potentially expensive regex');
+                            continue;
+                        }
+                        let regex;
+                        try { regex = new RegExp(p.regex, p.flags || 'g'); }
+                        catch (err) { if (errors.length < WORKER_MAX_ERRORS) errors.push((p.name || 'unnamed') + ': ' + err.message); continue; }
+                        let m; let patternHits = 0;
+                        while ((m = regex.exec(scanText)) !== null) {
+                            const safeMatch = String(m[0] || '').slice(0, 1200);
+                            const lineStart = Math.max(0, scanText.lastIndexOf('\\n', m.index - 1) + 1);
+                            const lineEndFound = scanText.indexOf('\\n', m.index);
+                            const lineEnd = lineEndFound === -1 ? Math.min(scanText.length, lineStart + 360) : Math.min(scanText.length, lineEndFound);
+                            addResultCapped(results, {
+                                type: p.name,
+                                match: safeMatch,
+                                line: lineNumberAt(lineStarts, m.index),
+                                offset: offsetBase + m.index,
+                                context: scanText.slice(lineStart, lineEnd).trim().slice(0, 360),
+                                file: fileName + (encoding ? ' [' + encoding + ']' : ''),
+                                encoding: encoding || ''
+                            });
+                            patternHits++;
+                            if (patternHits >= WORKER_MAX_RESULTS_PER_PATTERN || results.length >= WORKER_MAX_RESULTS) break;
+                            if (m[0] === '') regex.lastIndex++;
+                            if (regex.lastIndex > scanText.length) break;
+                        }
+                    }
+                }
+
+                function decodeHex(s) {
+                    if (s.length < 8 || s.length % 2) return null;
+                    const out = new Uint8Array(Math.min(s.length / 2, 120000));
+                    for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
+                    return out;
+                }
+
+                function base64Decode(s) {
+                    try {
+                        if (s.length > 160000) return null;
+                        const normalized = s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=');
+                        const bin = atob(normalized);
+                        if (bin.length > 12000000) return null;
+                        const out = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                        return out;
+                    } catch { return null; }
+                }
+
+                function decodeEscaped(s) {
+                    if (s.length > 250000) s = s.slice(0, 250000);
+                    let changed = false;
+                    const out = s
+                        .replace(/\\x([0-9a-f]{2})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); })
+                        .replace(/\\u([0-9a-f]{4})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); });
+                    return changed ? out : null;
+                }
+
+                function decodePercent(s) {
+                    if (!/%[0-9a-f]{2}/i.test(s) || s.length > 100000) return null;
+                    try { const out = decodeURIComponent(s); return out !== s ? out : null; } catch { return null; }
+                }
+
+                function base32Decode(s) {
+                    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+                    const clean = s.toUpperCase().replace(/=+$/,'').replace(/\\s+/g,'');
+                    if (clean.length < 16 || clean.length > 120000 || /[^A-Z2-7]/.test(clean)) return null;
+                    try {
+                        let bits = 0, value = 0, out = [];
+                        for (const ch of clean) {
+                            value = (value << 5) | alphabet.indexOf(ch); bits += 5;
+                            if (bits >= 8) { bits -= 8; out.push((value >>> bits) & 255); }
+                        }
+                        return new Uint8Array(out);
+                    } catch { return null; }
+                }
+
+                function printableRatio(bytes) {
+                    if (!bytes.length) return 0;
+                    let n = 0;
+                    for (const b of bytes) if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) n++;
+                    return n / bytes.length;
+                }
+
+                function heuristicFindings(text, fileName, offsetBase, encoding, entropyWindows, bytesLength, results) {
+                    const push = (type, match, note, category, severity, offset = offsetBase) => {
+                        if (results.length >= WORKER_MAX_RESULTS) return;
+                        results.push({ type, match: String(match).slice(0, 1200), line: 1 + (text.slice(0, Math.max(0, offset - offsetBase)).match(/\\n/g) || []).length, offset, context: note || String(match).slice(0, 360), file: fileName + (encoding ? ' [' + encoding + ']' : ''), encoding, category, severity });
+                    };
+                    const patterns = [
+                        ['Argon2 Password Hash', /\\$argon2(?:id|i|d)\\$[^\\s]{10,}/gi],
+                        ['bcrypt Password Hash', /\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}/g],
+                        ['scrypt Password Hash', /\\$7\\$[^\\s]{10,}/g],
+                        ['PBKDF2 Hash / Derivation Marker', /(?:pbkdf2|pbkdf)[:$=\\s][^\\s]{8,}/gi],
+                        ['MD5 Hash', /\\b[a-f0-9]{32}\\b/gi],
+                        ['SHA-1 Hash', /\\b[a-f0-9]{40}\\b/gi],
+                        ['SHA-256 Hash', /\\b[a-f0-9]{64}\\b/gi],
+                        ['SHA-512 Hash', /\\b[a-f0-9]{128}\\b/gi],
+                        ['JWT', /eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/g],
+                        ['OpenSSL Salted Payload', /U2FsdGVkX1[A-Za-z0-9+/=]{12,}/g],
+                        ['Fernet Token', /gAAAA[A-Za-z0-9_-]{30,}/g],
+                        ['PGP Encrypted Block', /-----BEGIN PGP MESSAGE-----[\\s\\S]{0,3000}?-----END PGP MESSAGE-----/g],
+                        ['Encrypted Private Key', /-----BEGIN (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----/g],
+                        ['Credential Assignment', /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|username|user)\\s*[=:]\\s*["']?[^\\s"']{4,}/gi],
+                        ['Admin Credential Pair', /\\b(?:admin|root)\\s*[:|/]\\s*[^\\s:|/]{3,}/gi]
+                    ];
+                    for (const [name, rx] of patterns) {
+                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        let m; let hits = 0;
+                        while ((m = rx.exec(text)) !== null && hits < 40) {
+                            push(name, m[0], text.slice(Math.max(0,m.index-60), Math.min(text.length,m.index+240)).trim(), 'Sensitive Material', /password|credential|token|api|secret|private/i.test(name) ? 'high' : 'medium', offsetBase + m.index);
+                            hits++; if (m[0] === '') rx.lastIndex++;
+                        }
+                    }
+
+                    const encRx = /\\b(?:AES(?:-?(?:128|192|256))?(?:-?(?:GCM|CBC|CTR|ECB))?|ChaCha20(?:-Poly1305)?|RSA(?:-?(?:OAEP|PKCS1))?|Ed25519|ECDSA|HMAC|HKDF|PBKDF2|Argon2|scrypt|RC4|Blowfish|Twofish|3DES|DES|Salsa20|XSalsa20|Fernet|OpenSSL|GPG|PGP)\\b/gi;
+                    let em; let cryptoHits = 0;
+                    while ((em = encRx.exec(text)) !== null && cryptoHits < 80 && results.length < WORKER_MAX_RESULTS) {
+                        push('Crypto Algorithm / Encryption Marker', em[0], text.slice(Math.max(0,em.index-60), Math.min(text.length,em.index+180)).trim(), 'Encryption / High Entropy', 'low', offsetBase + em.index);
+                        cryptoHits++; if (em[0] === '') encRx.lastIndex++;
+                    }
+                    if (entropyWindows > 0 && bytesLength >= 4096 && results.length < WORKER_MAX_RESULTS) {
+                        push('High-Entropy / Possible Compressed or Encrypted Region', entropyWindows + ' window(s) ≥ 7.65 bits/byte', 'High entropy is a triage signal, not proof of encryption.', 'Encryption / High Entropy', 'medium', offsetBase);
+                    }
+                }
+
+                function scanStringCandidates(text, fileName, offset, encoding, patterns, results, errors) {
+                    const seen = new Set();
+                    const pushDecoded = (decodedText, decoderName) => {
+                        if (!decodedText || results.length >= WORKER_MAX_RESULTS) return;
+                        const key = decoderName + '|' + decodedText.slice(0, 160);
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        scanText(decodedText, fileName, patterns, offset, decoderName, results, errors);
+                        heuristicFindings(decodedText, fileName, offset, decoderName, 0, decodedText.length, results);
+                    };
+
+                    const maxCandidates = Math.min(WORKER_MAX_DECODED_CANDIDATES, Math.floor(text.length / 12));
+                    let checked = 0;
+                    const candidates = text.match(/[A-Za-z0-9+/_=-]{20,}/g) || [];
+                    for (const candidate of candidates) {
+                        if (checked++ >= maxCandidates || results.length >= WORKER_MAX_RESULTS) break;
+                        if (candidate.length <= 160000 && /[+/_=-]/.test(candidate)) {
+                            const b64 = base64Decode(candidate);
+                            if (b64 && b64.length >= 8 && printableRatio(b64) > 0.68) {
+                                pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b64), 'base64-decoded');
+                            }
+                        }
+                        const b32 = candidate.length <= 120000 && /^[A-Z2-7]+$/.test(candidate) ? base32Decode(candidate) : null;
+                        if (b32 && printableRatio(b32) > 0.68) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b32), 'base32-decoded');
+                    }
+
+                    const hexCandidates = text.match(/\\b[0-9A-Fa-f]{16,240000}\\b/g) || [];
+                    for (const hc of hexCandidates.slice(0, 1000)) {
+                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        const decoded = decodeHex(hc.slice(0, 240000));
+                        if (decoded && printableRatio(decoded) > 0.60) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(decoded), 'hex-decoded');
+                    }
+                    const escaped = decodeEscaped(text);
+                    if (escaped) pushDecoded(escaped, 'escaped-decoded');
+                    const percent = decodePercent(text);
+                    if (percent) pushDecoded(percent, 'percent-decoded');
+                }
+
+                function processBytes(bytes, fileName, patterns, minStringLen, recovery = false) {
+                    const results = [], errors = [], telemetry = [], signatures = [];
+                    const maxStrings = recovery ? 5000 : WORKER_MAX_STRINGS;
+                    const maxStringScan = recovery ? WORKER_MAX_RECOVERY_SCAN : WORKER_MAX_STRING_SCAN;
+                    telemetry.push('Binary size: ' + bytes.length.toLocaleString() + ' bytes');
+                    const entropyWindow = 65536;
+                    let highEntropy = 0;
+                    for (let off = 0; off < bytes.length; off += entropyWindow) {
+                        const eVal = entropy(bytes.subarray(off, Math.min(bytes.length, off + entropyWindow)));
+                        if (eVal >= 7.65) highEntropy++;
+                        if (highEntropy <= 12 && eVal >= 7.75) telemetry.push('High entropy 0x' + off.toString(16) + '-' + Math.min(bytes.length, off + entropyWindow).toString(16) + ': ' + eVal.toFixed(3) + ' bits/byte');
+                    }
+                    const sigs = ${JSON.stringify(MAGIC_SIGNATURES)};
+                    for (const sig of sigs) {
+                        for (let i = 0; i <= bytes.length - sig.bytes.length; i++) {
+                            let ok = true;
+                            for (let j = 0; j < sig.bytes.length; j++) if (bytes[i+j] !== sig.bytes[j]) { ok = false; break; }
+                            if (ok) { signatures.push({ name: sig.name, kind: sig.kind, offset: i }); if (signatures.length < 30) telemetry.push('Signature: ' + sig.name + ' @ 0x' + i.toString(16)); break; }
+                        }
+                    }
+
+                    let emittedStrings = 0;
+                    const emit = s => {
+                        if (results.length >= (recovery ? 1200 : WORKER_MAX_RESULTS)) return;
+                        emittedStrings++;
+                        if (emittedStrings > maxStrings || s.text.length < minStringLen) return;
+                        const clipped = s.text.length > maxStringScan ? s.text.slice(0, maxStringScan) : s.text;
+                        scanText(clipped, fileName, patterns, s.offset, s.encoding, results, errors);
+                        heuristicFindings(clipped, fileName, s.offset, s.encoding, 0, bytes.length, results);
+                        if (!recovery && clipped.length >= 20) scanStringCandidates(clipped, fileName, s.offset, s.encoding, patterns, results, errors);
+                    };
+                    asciiStrings(bytes, minStringLen, emit);
+                    utf16Strings(bytes, true, minStringLen, emit, recovery ? 5000 : 12000);
+                    utf16Strings(bytes, false, minStringLen, emit, recovery ? 5000 : 12000);
+                    if (!recovery) {
+                        utf32Strings(bytes, true, minStringLen, emit, 6000);
+                        utf32Strings(bytes, false, minStringLen, emit, 6000);
+                    }
+                    telemetry.push('String extraction: processed up to ' + emittedStrings.toLocaleString() + ' printable candidates.');
+
+                    // Chunked UTF-8 scanning avoids building one giant string for large binaries.
+                    const decoder = new TextDecoder('utf-8', { fatal: false });
+                    let carry = '';
+                    for (let off = 0; off < Math.min(bytes.length, ${MAX_DECODE_BYTES}); off += WORKER_TEXT_CHUNK) {
+                        const end = Math.min(bytes.length, off + WORKER_TEXT_CHUNK);
+                        let chunk = decoder.decode(bytes.subarray(off, end), { stream: end < bytes.length && end < ${MAX_DECODE_BYTES} });
+                        chunk = carry + chunk;
+                        const scanBase = Math.max(0, off - carry.length);
+                        if (chunk.length > WORKER_TEXT_OVERLAP && end < Math.min(bytes.length, ${MAX_DECODE_BYTES})) {
+                            carry = chunk.slice(-WORKER_TEXT_OVERLAP);
+                            chunk = chunk.slice(0, -WORKER_TEXT_OVERLAP);
+                        } else carry = '';
+                        scanText(chunk, fileName, patterns, scanBase, 'UTF-8', results, errors);
+                        heuristicFindings(chunk, fileName, scanBase, 'UTF-8', highEntropy, bytes.length, results);
+                        if (results.length >= WORKER_MAX_RESULTS) break;
+                    }
+                    if (carry && results.length < WORKER_MAX_RESULTS) {
+                        scanText(carry, fileName, patterns, Math.max(0, Math.min(bytes.length, ${MAX_DECODE_BYTES}) - carry.length), 'UTF-8', results, errors);
+                        heuristicFindings(carry, fileName, Math.max(0, Math.min(bytes.length, ${MAX_DECODE_BYTES}) - carry.length), 'UTF-8', highEntropy, bytes.length, results);
+                    }
+                    return { results, errors: errors.slice(0, WORKER_MAX_ERRORS), telemetry, signatures, highEntropyWindows: highEntropy };
+                }
+
+                self.onmessage = function(e) {
+                    const taskId = e?.data?.taskId;
+                    try {
+                        if (!e?.data?.buffer) throw new Error('No ArrayBuffer received');
+                        const { buffer, patterns = [], fileName = 'unknown', minStringLen = 4, recovery = false } = e.data;
+                        const bytes = new Uint8Array(buffer);
+                        const result = processBytes(bytes, fileName, Array.isArray(patterns) ? patterns.slice(0, recovery ? 100 : 500) : [], Math.max(3, Math.min(12, minStringLen)), recovery);
+                        postSafe({ taskId, ...result, fatal: false });
+                    } catch (err) {
+                        postSafe({ taskId, results: [], errors: [err?.stack || err?.message || String(err)], telemetry: [], signatures: [], highEntropyWindows: 0, fatal: true, fatalError: err?.message || String(err) });
+                    }
+                };
+            `;
+            const url = URL.createObjectURL(new Blob([workerSource], { type: 'application/javascript' }));
+            const worker = new Worker(url);
+            worker.addEventListener('error', event => {
+                const details = [event?.message, event?.filename && `file=${event.filename}`, event?.lineno && `line=${event.lineno}`].filter(Boolean).join(' | ');
+                logStatus(`Worker failure: ${details || 'unknown runtime error'}.`, 'error', true);
+            });
+            worker.addEventListener('messageerror', () => logStatus('Worker message deserialization failed; the task will be retried with a fresh worker.', 'error', true));
+            return { worker, url };
+        }
+
+        function createWorkerPool(size) {
+            return Array.from({ length: size }, createWorker);
+        }
+
+        async function initLzma() {
+            if (lzmaReadyPromise) return lzmaReadyPromise;
+            lzmaReadyPromise = (async () => {
+                if (!window.lzma_wasm?.initWasm) throw new Error('lzma-wasm library unavailable');
+                await window.lzma_wasm.initWasm();
+                return true;
+            })();
+            try { await lzmaReadyPromise; logStatus('LZMA/XZ decoder initialized.', 'success'); }
+            catch (err) { lzmaReadyPromise = null; logStatus(`LZMA decoder unavailable: ${err.message}`, 'warn'); return false; }
+            return true;
+        }
+
+        async function initArchiveExtractor() {
+            if (archiveExtractor) return archiveExtractor;
+            if (!window.filing?.FilingBrowser) return null;
+            archiveExtractor = new window.filing.FilingBrowser({
+                wasmUrl: 'https://unpkg.com/filing/dist/esm/wasm/archive.wasm'
+            });
+            return archiveExtractor;
+        }
+
+        async function initBzip2() {
+            if (bzip2ReadyPromise) return bzip2ReadyPromise;
+            bzip2ReadyPromise = (async () => {
+                const mod = await import('https://cdn.jsdelivr.net/npm/bzip2-wasm@1.0.1/+esm');
+                const BZip2 = mod.default;
+                const decoder = new BZip2();
+                await decoder.init();
+                return decoder;
+            })();
+            try { return await bzip2ReadyPromise; }
+            catch (err) { bzip2ReadyPromise = null; logStatus(`BZIP2 decoder unavailable: ${err.message}`, 'warn', true); return null; }
+        }
+
+        function findAllBytes(bytes, needle) {
+            const out = [];
+            outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
+                for (let j = 0; j < needle.length; j++) if (bytes[i+j] !== needle[j]) continue outer;
+                out.push(i);
+                if (out.length >= 5000) break;
+            }
+            return out;
+        }
+
+        function toAscii(bytes) {
+            let out = '';
+            const limit = Math.min(bytes.length, MAX_DECODE_BYTES);
+            for (let i = 0; i < limit; i++) {
+                const b = bytes[i];
+                out += (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 ? String.fromCharCode(b) : '\n';
+            }
+            return out;
+        }
+
+        function readNullTerminatedAscii(bytes, start, maxLen = 512) {
+            let end = start;
+            while (end < bytes.length && end - start < maxLen && bytes[end] !== 0) end++;
+            if (end === start) return '';
+            return new TextDecoder().decode(bytes.subarray(start, end));
+        }
+
+        function decodeUtf8(bytes) {
+            return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, Math.min(bytes.length, MAX_DECODE_BYTES)));
+        }
+
+        function parseTar(bytes, label, depth = 0) {
+            const entries = [];
+            let off = 0;
+            while (off + 512 <= bytes.length && entries.length < 20000) {
+                const header = bytes.subarray(off, off + 512);
+                if (header.every(v => v === 0)) break;
+                const name = decodeAsciiField(header.subarray(0, 100));
+                const sizeField = decodeAsciiField(header.subarray(124, 136)).replace(/\0.*$/, '').trim();
+                const size = parseInt(sizeField || '0', 8);
+                const type = header[156];
+                if (!name || Number.isNaN(size) || size < 0 || off + 512 + size > bytes.length) break;
+                const data = bytes.slice(off + 512, off + 512 + size);
+                entries.push({ name, data, type });
+                off += 512 + Math.ceil(size / 512) * 512;
+            }
+            if (entries.length) {
+                logStatus(`${label}: TAR parser found ${entries.length} entries.`, 'success');
+                for (const e of entries) logStatus(`verbose:${label}: ${e.name} (${e.data.length.toLocaleString()} bytes)`, 'verbose');
+            }
+            return entries.filter(e => e.type === 0 || e.type === 48 || e.type === undefined);
+        }
+
+        function decodeAsciiField(bytes) {
+            let s = '';
+            for (const b of bytes) {
+                if (b === 0) break;
+                s += String.fromCharCode(b);
+            }
+            return s;
+        }
+
+        async function nativeDecompress(bytes, format) {
+            if (!('DecompressionStream' in window)) throw new Error('DecompressionStream unavailable');
+            const ds = new DecompressionStream(format);
+            const stream = new Blob([bytes]).stream().pipeThrough(ds);
+            const ab = await new Response(stream).arrayBuffer();
+            if (ab.byteLength > MAX_EXPANDED_BYTES) throw new Error('expanded stream exceeds safety limit');
+            return new Uint8Array(ab);
+        }
+
+        function makeLzmaAloneHeader({ lc, lp, pb, dict }) {
+            const out = new Uint8Array(13);
+            out[0] = (pb * 5 + lp) * 9 + lc;
+            out[1] = dict & 255; out[2] = (dict >>> 8) & 255; out[3] = (dict >>> 16) & 255; out[4] = (dict >>> 24) & 255;
+            for (let i = 5; i < 13; i++) out[i] = 0xff; // unknown/unbounded size with end marker
+            return out;
+        }
+
+        function concatBytes(a, b) {
+            const out = new Uint8Array(a.length + b.length);
+            out.set(a, 0); out.set(b, a.length); return out;
+        }
+
+        async function tryRawLzma(payload, params, label) {
+            if (!(await initLzma())) return null;
+            const header = makeLzmaAloneHeader(params);
+            try {
+                const wrapped = concatBytes(header, payload);
+                const out = window.lzma_wasm.decompress(wrapped);
+                if (out && out.length >= 32) {
+                    const printable = out.reduce((n, b) => n + (((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b === 0) ? 1 : 0), 0) / out.length;
+                    if (printable > 0.12 || out.length > 4096) {
+                        logStatus(`Raw LZMA decoded ${label}: ${out.length.toLocaleString()} bytes (lc=${params.lc},lp=${params.lp},pb=${params.pb},dict=${params.dict}).`, 'success', true);
+                        return new Uint8Array(out);
+                    }
+                }
+            } catch (_) {}
+            return null;
+        }
+
+        async function extractDlinkRawLzma(bytes, label, generation) {
+            const marker = new TextEncoder().encode('7zip');
+            const tags = findAllBytes(bytes, marker).filter(p => p > 0);
+            if (!tags.length) return [];
+            logStatus(`${label}: found ${tags.length} candidate 7zip/LZMA block tag(s).`, 'success');
+            const chunks = [];
+            let totalDecoded = 0;
+            for (let i = 0; i < tags.length && chunks.length < 600; i++) {
+                if (generation !== scanGeneration) return [];
+                const start = tags[i] + 4;
+                const end = i + 1 < tags.length ? tags[i + 1] : bytes.length;
+                if (end - start < 16) continue;
+                const payload = bytes.subarray(start, end);
+                logStatus(`verbose:${label}: trying raw-LZMA block ${i + 1}/${tags.length} @ 0x${tags[i].toString(16)} (${payload.length.toLocaleString()} bytes).`, 'verbose');
+                let decoded = null;
+                for (const params of DEFAULT_RAW_LZMA_PROBES) {
+                    decoded = await tryRawLzma(payload, params, `${label} block ${i + 1}`);
+                    if (decoded) break;
+                }
+                if (decoded) {
+                    totalDecoded += decoded.length;
+                    if (totalDecoded > MAX_EXPANDED_BYTES) {
+                        logStatus(`${label}: expanded raw-LZMA data exceeded ${Math.round(MAX_EXPANDED_BYTES / 1024 / 1024)} MB; stopping safely.`, 'warn', true);
+                        break;
+                    }
+                    chunks.push(decoded);
+                    logStatus(`verbose:${label}: block ${i + 1} decoded; accumulated ${totalDecoded.toLocaleString()} bytes.`, 'verbose');
+                }
+                if (i % 2 === 0) setProgress(Math.min(72, 20 + (i / Math.max(tags.length, 1)) * 50), `Firmware decompression • ${i + 1}/${tags.length} blocks`);
+            }
+            if (!chunks.length) return [];
+            const combined = new Uint8Array(totalDecoded);
+            let cursor = 0;
+            for (const chunk of chunks) { combined.set(chunk, cursor); cursor += chunk.length; }
+            logStatus(`${label}: reconstructed ${chunks.length} decoded block(s), ${combined.length.toLocaleString()} bytes total.`, 'success', true);
+            return [{ name: `${label} :: reconstructed LZMA payload`, data: combined }];
+        }
+
+        async function extractZip(file, generation) {
+            if (!window.JSZip) throw new Error('JSZip unavailable');
+            logStatus(`Extracting ZIP: ${file.name}`, 'info', true);
+            const zip = await window.JSZip.loadAsync(file);
+            const entries = Object.values(zip.files).filter(e => !e.dir);
+            const outputs = [];
+            logStatus(`ZIP opened: ${entries.length} file entries.`, 'success');
+            for (let i = 0; i < entries.length; i++) {
+                if (generation !== scanGeneration) return outputs;
+                const e = entries[i];
+                logStatus(`verbose:${file.name}: seeing ${e.name}`, 'verbose');
+                try {
+                    const blob = await e.async('blob');
+                    if (blob.size > 50 * 1024 * 1024) {
+                        logStatus(`SKIP ${e.name}: extracted file > 50 MB.`, 'warn');
+                    } else outputs.push({ name: `${file.name} :: ${e.name}`, data: new Uint8Array(await blob.arrayBuffer()) });
+                } catch (err) { logStatus(`ERROR extracting ${e.name}: ${err.message}`, 'error', true); }
+                setProgress(Math.min(20, 5 + ((i + 1) / Math.max(entries.length,1)) * 15), `Extracting ${file.name} • ${i + 1}/${entries.length}`);
+            }
+            return outputs;
+        }
+
+        async function extractWithFiling(file, generation) {
+            const extractor = await initArchiveExtractor();
+            if (!extractor) return [];
+            try {
+                logStatus(`Archive probe: ${file.name}`, 'info', true);
+                const entries = await extractor.extract(file);
+                const outputs = [];
+                for (const e of entries) {
+                    if (generation !== scanGeneration) return outputs;
+                    if (!e?.file || e.file.size > 50 * 1024 * 1024) continue;
+                    logStatus(`verbose:${file.name}: ${e.pathname || e.filename || 'unnamed entry'}`, 'verbose');
+                    outputs.push({ name: `${file.name} :: ${e.pathname || e.filename}`, data: new Uint8Array(await e.file.arrayBuffer()) });
+                }
+                logStatus(`Archive extraction complete: ${outputs.length} entries.`, 'success');
+                return outputs;
+            } catch (err) {
+                logStatus(`Archive probe failed for ${file.name}: ${err.message}`, 'warn');
+                return [];
+            }
+        }
+
+        async function scanDerivedBuffer(item, generation, depth = 0, visited = new Set(), precomputed = null) {
+            if (generation !== scanGeneration || depth > 3 || !item?.data?.length) return;
+            const key = `${item.name}|${item.data.length}|${depth}`;
+            if (visited.has(key)) return;
+            visited.add(key);
+            const data = item.data instanceof Uint8Array ? item.data : new Uint8Array(item.data);
+            if (data.length > MAX_EXPANDED_BYTES) { logStatus(`SKIP ${item.name}: expanded data exceeds safety limit.`, 'warn'); return; }
+
+            await analyzeUniversalFilesystems(data, item.name, generation, visited, depth);
+
+            const result = precomputed || await (async () => {
+                const worker = createWorker();
+                const tempTarget = { file: new File([data], item.name, { type: 'application/octet-stream' }), displayName: item.name };
+                let out;
+                try { out = await runWorkerTask(worker, tempTarget, 1, true); }
+                finally { worker.worker.terminate(); URL.revokeObjectURL(worker.url); }
+                return out;
+            })();
+            if (!precomputed) (result.results || []).forEach(addResult);
+            (result.errors || []).forEach(e => logStatus(`REGEX ERROR: ${e}`, 'error', true));
+            for (const t of (result.telemetry || [])) logStatus(`verbose:${item.name}: ${t}`, 'verbose');
+            if (result.highEntropyWindows > 0 && activeMode === 'firmware') logStatus(`${item.name}: ${result.highEntropyWindows} high-entropy region(s); content may be compressed/encrypted.`, 'warn');
+
+            const sigMap = new Map((result.signatures || []).map(s => [s.kind + ':' + s.name, s]));
+            const hasSquash = Array.from(sigMap.values()).some(s => s.name.startsWith('SquashFS'));
+            const hasZip = Array.from(sigMap.values()).some(s => s.name === 'ZIP archive');
+            const hasTar = Array.from(sigMap.values()).some(s => s.name.includes('tar'));
+            const hasGzip = Array.from(sigMap.values()).some(s => s.name === 'GZIP stream');
+            const hasXz = Array.from(sigMap.values()).some(s => s.name === 'XZ stream');
+            const hasBzip = Array.from(sigMap.values()).some(s => s.name === 'BZIP2 stream');
+            const hasZlib = Array.from(sigMap.values()).some(s => s.name === 'Zlib/Deflate stream');
+            const has7z = Array.from(sigMap.values()).some(s => s.name === '7-Zip archive');
+            const hasLz4 = Array.from(sigMap.values()).some(s => s.name === 'LZ4 frame');
+            const hasZstd = Array.from(sigMap.values()).some(s => s.name === 'Zstandard stream');
+            const rawLzmaTagCount = findAllBytes(data, new TextEncoder().encode('7zip')).length;
+
+            if (hasZip) {
+                try {
+                    const file = new File([data], item.name, { type: 'application/zip' });
+                    const children = await extractZip(file, generation);
+                    for (const child of children) await scanDerivedBuffer(child, generation, depth + 1, visited);
+                } catch (err) { logStatus(`ZIP extraction error ${item.name}: ${err.message}`, 'error', true); }
+            }
+            if (has7z || /\\.(?:7z|rar|tar|cab|ar|cpio|iso)$/i.test(item.name)) {
+                const file = new File([data], item.name, { type: 'application/octet-stream' });
+                const children = await extractWithFiling(file, generation);
+                for (const child of children) await scanDerivedBuffer(child, generation, depth + 1, visited);
+            }
+            if (hasTar) {
+                const children = parseTar(data, item.name, depth);
+                for (const child of children.map(e => ({ name: `${item.name} :: ${e.name}`, data: e.data }))) await scanDerivedBuffer(child, generation, depth + 1, visited);
+            }
+            if (hasZlib) {
+                for (const fmt of ['deflate', 'deflate-raw']) {
+                    try {
+                        const dec = await nativeDecompress(data, fmt);
+                        logStatus(`Decompressed ${fmt} ${item.name}: ${dec.length.toLocaleString()} bytes.`, 'success', true);
+                        await scanDerivedBuffer({ name: `${item.name} :: ${fmt}`, data: dec }, generation, depth + 1, visited);
+                        break;
+                    } catch (err) { logStatus(`${fmt} probe failed ${item.name}: ${err.message}`, 'verbose'); }
+                }
+            }
+            if (hasGzip) {
+                try {
+                    const dec = await nativeDecompress(data, 'gzip');
+                    logStatus(`Decompressed GZIP ${item.name}: ${dec.length.toLocaleString()} bytes.`, 'success', true);
+                    await scanDerivedBuffer({ name: `${item.name} :: gzip`, data: dec }, generation, depth + 1, visited);
+                } catch (err) { logStatus(`GZIP probe failed ${item.name}: ${err.message}`, 'verbose'); }
+            }
+            if (hasXz) {
+                if (await initLzma()) {
+                    try {
+                        const dec = new Uint8Array(window.lzma_wasm.decompress(data));
+                        logStatus(`Decompressed XZ ${item.name}: ${dec.length.toLocaleString()} bytes.`, 'success', true);
+                        await scanDerivedBuffer({ name: `${item.name} :: xz`, data: dec }, generation, depth + 1, visited);
+                    } catch (err) { logStatus(`XZ probe failed ${item.name}: ${err.message}`, 'verbose'); }
+                }
+            }
+            if (/\.(?:lzma|alone)$/i.test(item.name)) {
+                if (await initLzma()) {
+                    try {
+                        const dec = new Uint8Array(window.lzma_wasm.decompress(data));
+                        logStatus(`Decompressed LZMA-alone ${item.name}: ${dec.length.toLocaleString()} bytes.`, 'success', true);
+                        await scanDerivedBuffer({ name: `${item.name} :: lzma`, data: dec }, generation, depth + 1, visited);
+                    } catch (err) { logStatus(`LZMA-alone probe failed ${item.name}: ${err.message}`, 'verbose'); }
+                }
+            }
+            if (hasLz4) logStatus(`LZ4 frame detected in ${item.name}; raw block decompression is not yet enabled, but the region is fingerprinted.`, 'warn');
+            if (hasZstd) logStatus(`Zstandard stream detected in ${item.name}; attempting archive extraction where applicable.`, 'warn');
+
+            if (hasBzip) {
+                const decoder = await initBzip2();
+                if (decoder) {
+                    try {
+                        const dec = decoder.decompress(data, Math.min(96 * 1024 * 1024, MAX_EXPANDED_BYTES));
+                        const bytesOut = dec instanceof Uint8Array ? dec : new Uint8Array(dec);
+                        logStatus(`Decompressed BZIP2 ${item.name}: ${bytesOut.length.toLocaleString()} bytes.`, 'success', true);
+                        await scanDerivedBuffer({ name: `${item.name} :: bzip2`, data: bytesOut }, generation, depth + 1, visited);
+                    } catch (err) { logStatus(`BZIP2 probe failed ${item.name}: ${err.message}`, 'verbose'); }
+                }
+            }
+            if (activeMode === 'firmware' && (hasSquash || bytesContainAscii(data, 'wrgg19') || bytesContainAscii(data, 'WRGG19') || rawLzmaTagCount >= 2)) {
+                if (rawLzmaTagCount >= 2) logStatus(`Raw-LZMA heuristic enabled for ${item.name}: ${rawLzmaTagCount} 7zip tag(s) found.`, 'info', true);
+                const blocks = await extractDlinkRawLzma(data, item.name, generation);
+                for (const block of blocks) await scanDerivedBuffer(block, generation, depth + 1, visited);
+            }
+        }
+
+        function bytesContainAscii(bytes, text) {
+            const needle = new TextEncoder().encode(text);
+            return findAllBytes(bytes, needle).length > 0;
+        }
+
+        const WORKER_TASK_TIMEOUT_MS = 45000;
+
+        function replaceWorker(entry) {
+            try { entry.worker?.terminate(); } catch (_) {}
+            try { if (entry.url) URL.revokeObjectURL(entry.url); } catch (_) {}
+            const fresh = createWorker();
+            entry.worker = fresh.worker;
+            entry.url = fresh.url;
+        }
+
+        async function runWorkerTask(entry, target, taskId, recovery = false) {
+            let lastError = null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                if (attempt > 0) {
+                    replaceWorker(entry);
+                    logStatus(`${target.displayName}: retrying in a fresh worker using ${recovery ? 'recovery' : 'standard'} scan profile.`, 'warn', true);
+                }
+                try {
+                    const data = new Uint8Array(await target.file.arrayBuffer());
+                    return await new Promise((resolve, reject) => {
+                        let settled = false;
+                        let timer = null;
+                        const finish = (fn, value) => {
+                            if (settled) return;
+                            settled = true;
+                            if (timer) clearTimeout(timer);
+                            entry.worker.removeEventListener('message', onMessage);
+                            entry.worker.removeEventListener('error', onError);
+                            entry.worker.removeEventListener('messageerror', onMessageError);
+                            fn(value);
+                        };
+                        const onMessage = event => {
+                            if (event?.data?.taskId !== taskId) return;
+                            if (event.data?.fatal) finish(reject, new Error(event.data.fatalError || 'worker reported fatal error'));
+                            else finish(resolve, event.data);
+                        };
+                        const onError = event => {
+                            const detail = [event?.message, event?.lineno && `line=${event.lineno}`, event?.filename && `file=${event.filename}`].filter(Boolean).join(' | ');
+                            finish(reject, new Error(detail || 'worker runtime error'));
+                        };
+                        const onMessageError = () => finish(reject, new Error('worker message deserialization error'));
+                        entry.worker.addEventListener('message', onMessage);
+                        entry.worker.addEventListener('error', onError);
+                        entry.worker.addEventListener('messageerror', onMessageError);
+                        timer = setTimeout(() => finish(reject, new Error(`worker timeout after ${WORKER_TASK_TIMEOUT_MS / 1000}s`)), WORKER_TASK_TIMEOUT_MS);
+                        try {
+                            logStatus(`verbose:${target.displayName}: transferring ${data.byteLength.toLocaleString()} bytes to worker.`, 'verbose');
+                            entry.worker.postMessage({ taskId, buffer: data.buffer, patterns: currentPatterns, fileName: target.displayName, minStringLen: 4, recovery }, [data.buffer]);
+                        } catch (error) {
+                            finish(reject, error);
+                        }
+                    });
+                } catch (error) {
+                    lastError = error;
+                    logStatus(`${target.displayName}: worker attempt ${attempt + 1} failed: ${error.message}`, 'error', true);
+                    if (attempt === 0) continue;
+                }
+            }
+            throw lastError || new Error('worker task failed');
+        }
+
+        async function scanFiles(files, generation) {
+            scanInProgress = true;
+            scanGeneration = generation;
+            updateFileSummary();
+            resetResults();
+            setEngineStatus('ANALYZING');
+            setProgress(0, 'Preparing target set');
+            logStatus(`Starting ${activeMode} scan with ${currentPatterns.length} patterns.`, 'info', true);
+
+            const normalized = Array.from(files || []).filter(Boolean);
+            if (!normalized.length) {
+                scanInProgress = false; updateFileSummary(); setEngineStatus('IDLE'); setProgress(0, 'No targets'); return;
+            }
+            let completed = 0;
+            const baseTargets = [];
+            for (const file of normalized) {
+                if (generation !== scanGeneration) return;
+                if (file.size > 50 * 1024 * 1024) { logStatus(`SKIP ${file.name}: exceeds 50 MB input limit.`, 'warn', true); continue; }
+                const path = file.webkitRelativePath || file.name;
+                const slash = path.lastIndexOf('/');
+                if (verbose && slash > 0) logStatus(`verbose: entering directory ${path.slice(0, slash)}`, 'verbose');
+                baseTargets.push({ file, displayName: path });
+            }
+            logStatus(`Queued ${baseTargets.length} target file${baseTargets.length === 1 ? '' : 's'}.`, 'success', true);
+            setProgress(4, `0 / ${baseTargets.length} root targets analyzed`);
+
+            const cores = navigator.hardwareConcurrency || 4;
+            const memoryGB = navigator.deviceMemory || 8;
+            const recommended = memoryGB <= 2 ? 1 : memoryGB <= 4 ? Math.min(2, cores) : Math.min(4, cores - 1);
+            const poolSize = Math.max(1, recommended);
+            const pool = createWorkerPool(Math.min(poolSize, baseTargets.length));
+            let nextIndex = 0;
+            const dispatch = async (entry) => {
+                while (generation === scanGeneration) {
+                    const index = nextIndex++;
+                    if (index >= baseTargets.length) return;
+                    const target = baseTargets[index];
+                    logStatus(`Analyzing ${target.displayName}...`, 'info', true);
+                    try {
+                        let workerResult;
+                        try {
+                            workerResult = await runWorkerTask(entry, target, index, false);
+                        } catch (workerError) {
+                            logStatus(`${target.displayName}: standard worker path failed (${workerError.message}); entering recovery scanner.`, 'warn', true);
+                            workerResult = await runWorkerTask(entry, target, index, true);
+                        }
+                        (workerResult.results || []).forEach(addResult);
+                        (workerResult.errors || []).forEach(e => logStatus(`REGEX ERROR ${target.displayName}: ${e}`, 'error', true));
+                        for (const t of (workerResult.telemetry || [])) logStatus(`verbose:${target.displayName}: ${t}`, 'verbose');
+                        if (workerResult.highEntropyWindows > 0 && activeMode === 'firmware') logStatus(`${target.displayName}: high entropy detected; decompression probes enabled.`, 'warn', true);
+                        if (verbose) for (const s of (workerResult.signatures || [])) logStatus(`verbose:${target.displayName}: ${s.name} @ 0x${s.offset.toString(16)}`, 'verbose');
+
+                        const needsDeepExtraction = activeMode === 'firmware' ||
+                            (workerResult.signatures || []).some(s => ['ZIP archive','7-Zip archive','GZIP stream','XZ stream','BZIP2 stream'].includes(s.name)) ||
+                            /\.(?:zip|7z|rar|tar|tgz|tbz2|txz|cpio)$/i.test(target.displayName);
+                        if (needsDeepExtraction) {
+                            const fullData = new Uint8Array(await target.file.arrayBuffer());
+                            await scanDerivedBuffer({ name: target.displayName, data: fullData }, generation, 0, new Set(), workerResult);
+                        }
+                    } catch (error) {
+                        logStatus(`ERROR reading ${target.displayName}: ${error.message}`, 'error', true);
+                    }
+                    completed++;
+                    setProgress(5 + (completed / Math.max(baseTargets.length, 1)) * 92, `${completed} / ${baseTargets.length} root targets processed`);
+                }
+            };
+
+            await Promise.all(pool.map(entry => dispatch(entry)));
+            pool.forEach(({ worker, url }) => { worker.terminate(); URL.revokeObjectURL(url); });
+            if (generation !== scanGeneration) return;
+            scanInProgress = false;
+            updateFileSummary();
+            setProgress(100, `Complete • ${completed} root target${completed === 1 ? '' : 's'} processed`);
+            setEngineStatus(totalFindings ? 'FINDINGS' : 'CLEAN', totalFindings ? 'danger' : 'success');
+            logStatus(`Scan complete. ${totalFindings} exposure${totalFindings === 1 ? '' : 's'} detected.`, totalFindings ? 'warn' : 'success', true);
+        }
+
+        function queueFiles(files) {
+            selectedFiles = Array.from(files || []);
+            updateFileSummary();
+            resetResults();
+            terminalOutput.innerHTML = '';
+            if (!selectedFiles.length) {
+                logStatus('No files selected.', 'warn', true);
+                setProgress(0, 'Waiting for input');
+                return;
+            }
+            setProgress(0, `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} queued`);
+            logStatus(`Loaded ${selectedFiles.length} input file${selectedFiles.length === 1 ? '' : 's'}.`, 'success', true);
+            for (const f of selectedFiles.slice(0, verbose ? 80 : 8)) logStatus(`verbose: queued ${f.webkitRelativePath || f.name}`, 'verbose');
+            setEngineStatus('READY', 'success');
+        }
+
+        function startScan() {
+            if (!selectedFiles.length || scanInProgress) return;
+            const generation = ++scanGeneration;
+            scanFiles(selectedFiles, generation).catch(error => {
+                scanInProgress = false;
+                updateFileSummary();
+                setEngineStatus('ERROR', 'danger');
+                logStatus(`FATAL SCAN ERROR: ${error.message}`, 'error', true);
+            });
+        }
+
+        function csvEscape(value) {
+            const s = String(value ?? '');
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+
+        function sqlEscape(value) {
+            return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/\0/g, '');
+        }
+
+        function exportCsv(data) {
+            const headers = ['type','category','severity','file','encoding','line','offset','match','context','note'];
+            return [headers.join(','), ...data.map(r => headers.map(h => csvEscape(r[h])).join(','))].join('\n');
+        }
+
+        function exportSql(data) {
+            const rows = data.map(r => `('${sqlEscape(r.type)}','${sqlEscape(r.category)}','${sqlEscape(r.severity)}','${sqlEscape(r.file)}','${sqlEscape(r.encoding)}',${Number(r.line)||0},${Number(r.offset)||0},'${sqlEscape(r.match)}','${sqlEscape(r.context)}','${sqlEscape(r.note)}')`);
+            return [
+                '-- SecretBurrow findings export',
+                'CREATE TABLE IF NOT EXISTS secretburrow_findings (type TEXT, category TEXT, severity TEXT, file TEXT, encoding TEXT, line INTEGER, byte_offset INTEGER, match TEXT, context TEXT, note TEXT);',
+                rows.length ? `INSERT INTO secretburrow_findings (type, category, severity, file, encoding, line, byte_offset, match, context, note) VALUES\n${rows.join(',\n')};` : '-- No findings in current view.'
+            ].join('\n\n');
+        }
+
+        function exportMarkdown(data) {
+            const lines = [
+                '# SecretBurrow Findings',
+                '',
+                `Generated: ${new Date().toISOString()}`,
+                `Findings exported: ${data.length}`,
+                '',
+                '| Severity | Type | File | Encoding | Line | Offset | Match | Context |',
+                '|---|---|---|---|---:|---:|---|---|'
+            ];
+            for (const r of data) {
+                const esc = v => String(v ?? '').replace(/\|/g,'\\|').replace(/\n/g,' ');
+                lines.push(`| ${esc(r.severity)} | ${esc(r.type)} | ${esc(r.file)} | ${esc(r.encoding)} | ${r.line || 0} | 0x${(r.offset || 0).toString(16)} | ${esc(r.match)} | ${esc(r.context || r.note)} |`);
+            }
+            return lines.join('\n');
+        }
+
+        function exportJson(data) {
+            return JSON.stringify({
+                tool: 'SecretBurrow',
+                generated: new Date().toISOString(),
+                findings: data
+            }, null, 2);
+        }
+
+        function exportText(data) {
+            const lines = [
+                'SecretBurrow Findings',
+                `Generated: ${new Date().toISOString()}`,
+                `Findings exported: ${data.length}`,
+                ''
+            ];
+            data.forEach((r, i) => {
+                lines.push(`#${i + 1} [${r.severity}] ${r.type}`);
+                lines.push(`File: ${r.file}`);
+                lines.push(`Encoding: ${r.encoding || 'n/a'}`);
+                lines.push(`Line: ${r.line || 0} | Offset: 0x${(r.offset || 0).toString(16)}`);
+                lines.push(`Match: ${r.match}`);
+                lines.push(`Context: ${r.context || r.note || ''}`);
+                lines.push('');
+            });
+            return lines.join('\n');
+        }
+
+        function downloadBlob(content, filename, mime) {
+            const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename; a.rel = 'noopener';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function exportPdf(data) {
+            const jsPDF = window.jspdf?.jsPDF;
+            if (!jsPDF) {
+                logStatus('PDF export unavailable: jsPDF did not load. Use print/save as PDF instead.', 'error', true);
+                window.print();
+                return;
+            }
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const left = 36, top = 42, width = 523;
+            let y = top;
+            const line = (txt, size = 9, gap = 13) => {
+                doc.setFontSize(size);
+                const parts = doc.splitTextToSize(String(txt ?? ''), width);
+                if (y + parts.length * gap > 800) { doc.addPage(); y = top; }
+                doc.text(parts, left, y);
+                y += parts.length * gap;
+            };
+            doc.setFont('helvetica','bold');
+            line('SecretBurrow Findings', 16, 18);
+            doc.setFont('helvetica','normal');
+            line(`Generated: ${new Date().toISOString()}`, 8, 12);
+            line(`Findings exported: ${data.length}`, 8, 15);
+            data.forEach((r, i) => {
+                line(`${i+1}. [${r.severity}] ${r.type}`, 10, 13);
+                line(`File: ${r.file}`, 8, 12);
+                line(`Encoding: ${r.encoding || 'n/a'} | Line: ${r.line || 0} | Offset: 0x${(r.offset || 0).toString(16)}`, 8, 12);
+                line(`Match: ${r.match}`, 8, 12);
+                line(`Context: ${r.context || r.note || ''}`, 8, 14);
+                y += 5;
+            });
+            doc.save(`secretburrow-findings-${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        function exportFindings(format) {
+            const data = getVisibleFindings();
+            if (!data.length) { logStatus('Export skipped: no findings in the current search view.', 'warn', true); return; }
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            if (format === 'csv') downloadBlob(exportCsv(data), `secretburrow-findings-${stamp}.csv`, 'text/csv');
+            else if (format === 'sql') downloadBlob(exportSql(data), `secretburrow-findings-${stamp}.sql`, 'application/sql');
+            else if (format === 'md') downloadBlob(exportMarkdown(data), `secretburrow-findings-${stamp}.md`, 'text/markdown');
+            else if (format === 'txt') downloadBlob(exportText(data), `secretburrow-findings-${stamp}.txt`, 'text/plain');
+            else if (format === 'json') downloadBlob(exportJson(data), `secretburrow-findings-${stamp}.json`, 'application/json');
+            else if (format === 'pdf') exportPdf(data);
+            logStatus(`Exported ${data.length} finding${data.length === 1 ? '' : 's'} as ${format.toUpperCase()}.`, 'success', true);
+        }
+
+        function applyTheme(theme) { document.documentElement.classList.toggle('light', theme === 'light'); }
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeMode = btn.dataset.mode;
+                currentPatterns = loadPatterns(activeMode);
+                modeSubtext.textContent = activeMode === 'code'
+                    ? 'Recursive source/config/archive analysis with multiple encodings and archive formats'
+                    : 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings';
+                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : 'Firmware';
+                patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : 'Firmware'} mode.`, 'info', true);
+            });
+        });
+
+        // Drag/drop and inputs
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => dropzone.addEventListener(eventName, preventDefaults, false));
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+        ['dragenter', 'dragover'].forEach(eventName => dropzone.addEventListener(eventName, () => dropzone.classList.add('is-dragover')));
+        ['dragleave', 'drop'].forEach(eventName => dropzone.addEventListener(eventName, () => dropzone.classList.remove('is-dragover')));
+        dropzone.addEventListener('drop', e => queueFiles(e.dataTransfer.files));
+        dropzone.addEventListener('click', e => { if (!e.target.closest('button')) fileInput.click(); });
+        dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+        document.getElementById('browse-files').addEventListener('click', () => fileInput.click());
+        document.getElementById('browse-folder').addEventListener('click', () => folderInput.click());
+        fileInput.addEventListener('change', e => queueFiles(e.target.files));
+        folderInput.addEventListener('change', e => queueFiles(e.target.files));
+        scanBtn.addEventListener('click', startScan);
+
+        // Findings search + export
+        findingsSearchInput.addEventListener('input', () => {
+            findingsSearch = findingsSearchInput.value;
+            renderFindings();
+        });
+        exportBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            const open = exportMenu.classList.toggle('active');
+            exportBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        document.querySelectorAll('.export-item').forEach(item => {
+            item.addEventListener('click', () => {
+                exportFindings(item.dataset.export);
+                exportMenu.classList.remove('active');
+                exportBtn.setAttribute('aria-expanded', 'false');
+            });
+        });
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.export-wrap')) {
+                exportMenu.classList.remove('active');
+                exportBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        document.getElementById('terminal-clear').addEventListener('click', () => {
+            terminalOutput.innerHTML = '';
+            logStatus('Terminal cleared.', 'info', true);
+        });
+
+        // Verbose mode
+        verboseToggle.checked = verbose;
+        verboseToggle.addEventListener('change', () => {
+            verbose = verboseToggle.checked;
+            localStorage.setItem('secretburrow_verbose', verbose ? '1' : '0');
+            logStatus(`Verbose telemetry ${verbose ? 'enabled' : 'disabled'}.`, 'info', true);
+        });
+
+        // Theme + settings
+        applyTheme(currentTheme);
+        const settingsModal = document.getElementById('settings-modal');
+        const patternsInput = document.getElementById('patterns-input');
+        const themeSelect = document.getElementById('theme-select');
+        themeSelect.value = currentTheme;
+        patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            currentTheme = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+            applyTheme(currentTheme); localStorage.setItem('theme', currentTheme); themeSelect.value = currentTheme;
+            logStatus(`Theme changed to ${currentTheme}.`, 'info', true);
+        });
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            themeSelect.value = currentTheme;
+            patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+            settingsModal.classList.add('active');
+        });
+        document.getElementById('close-modal').addEventListener('click', () => settingsModal.classList.remove('active'));
+        settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.remove('active'); });
+        document.getElementById('save-settings').addEventListener('click', () => {
+            try {
+                const newPatterns = JSON.parse(patternsInput.value);
+                if (!Array.isArray(newPatterns)) throw new Error('Patterns must be a JSON array.');
+                const newTheme = themeSelect.value;
+                localStorage.setItem(`customPatterns_${activeMode}`, JSON.stringify(newPatterns));
+                localStorage.setItem('theme', newTheme);
+                currentPatterns = newPatterns; currentTheme = newTheme; applyTheme(currentTheme);
+                settingsModal.classList.remove('active');
+                logStatus(`${activeMode.toUpperCase()} engine configuration saved.`, 'success', true);
+            } catch (error) {
+                logStatus(`SETTINGS ERROR: ${error.message}`, 'error', true);
+                alert('Invalid pattern JSON. Check the terminal for details.');
+            }
+        });
+        document.getElementById('reset-settings').addEventListener('click', () => {
+            localStorage.removeItem(`customPatterns_${activeMode}`);
+            currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+            patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+            logStatus(`Reset ${activeMode} to factory default patterns.`, 'warn', true);
+        });
+
+        // Pattern JSON import
+        const patternDropzone = document.getElementById('pattern-dropzone');
+        const patternInput = document.getElementById('pattern-input');
+        patternDropzone.addEventListener('click', () => patternInput.click());
+        patternDropzone.addEventListener('dragover', preventDefaults);
+        patternDropzone.addEventListener('drop', e => { preventDefaults(e); handlePatternFile(e.dataTransfer.files[0]); });
+        patternInput.addEventListener('change', e => handlePatternFile(e.target.files[0]));
+        function handlePatternFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    if (!Array.isArray(parsed)) throw new Error('JSON root must be an array.');
+                    patternsInput.value = JSON.stringify(parsed, null, 2);
+                    logStatus(`Loaded ${parsed.length} custom pattern(s). Click Apply & Save to activate.`, 'success', true);
+                } catch (error) {
+                    logStatus(`PATTERN IMPORT ERROR: ${error.message}`, 'error', true);
+                    alert('Invalid JSON file.');
+                }
+            };
+            reader.onerror = () => logStatus(`PATTERN IMPORT ERROR: could not read ${file.name}.`, 'error', true);
+            reader.readAsText(file);
+        }
+
+        // Initial state
+        logStatus('SecretBurrow ready. Analysis stays client-side.', 'success', true);
+        logStatus(`Engine loaded: ${currentPatterns.length} ${activeMode} patterns + universal encoding/crypto/hash heuristics.`, 'info', true);
+        logStatus(`Verbose telemetry: ${verbose ? 'ON' : 'OFF'}.`, 'info', true);
+        updateFileSummary();
+        setProgress(0, 'Waiting for input');
+        </script>
+</body>
+</html>
