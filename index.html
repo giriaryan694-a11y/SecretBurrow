@@ -601,14 +601,15 @@
             <div class="tab-bar">
                 <button class="tab-btn active" data-mode="code">Code Repo Mode</button>
                 <button class="tab-btn" data-mode="firmware">Firmware Mode</button>
+                <button class="tab-btn" data-mode="git">.git Mode</button>
             </div>
 
             <div class="git-history-controls" id="git-history-controls">
-                <div class="git-history-title">🕰️ Git History Analysis</div>
+                <div class="git-history-title" id="git-history-title">🧬 Git Object Database Analysis</div>
                 <label class="git-option">
                     <input type="checkbox" id="git-history-scan">
-                    <span>Scan previous Git versions</span>
-                    <small>Read the local .git object database, walk commit trees, reconstruct historical snapshots logically, and scan unique historical blobs for leaks.</small>
+                    <span id="git-history-scan-label">Scan previous Git versions</span>
+                    <small id="git-history-scan-help">Read the local .git object database, walk commit trees, reconstruct historical snapshots logically, and scan unique historical blobs for leaks.</small>
                 </label>
                 <label class="git-option">
                     <input type="checkbox" id="git-history-verbose">
@@ -805,6 +806,18 @@
             { name: "Private Key Header", regex: "-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", flags: "g" },
             { name: "URL with Credentials", regex: "https?://[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
             { name: "MAC Address", regex: "(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}", flags: "g" }
+        ];
+
+        // Git metadata mode uses source patterns plus Git-specific repository indicators.
+        const GIT_PATTERNS = [
+            ...CODE_REPO_PATTERNS,
+            { name: 'GitHub token in Git metadata', regex: /github_pat_[A-Za-z0-9_]{20,}/g, severity: 'critical' },
+            { name: 'Legacy GitHub token in Git metadata', regex: /gh[pousr]_[A-Za-z0-9_]{20,}/g, severity: 'critical' },
+            { name: 'GitLab personal/project token', regex: /glpat-[A-Za-z0-9_-]{20,}/g, severity: 'high' },
+            { name: 'Git credential URL', regex: /https?:\/\/[^\s:@/]+(?::[^\s@/]*)?@[^\s/]+/g, severity: 'high' },
+            { name: 'Git remote with embedded credentials', regex: /(?:url|remote).*?(?:https?|ssh|git):\/\/[^\s]+@[^\s]+/gi, severity: 'high' },
+            { name: 'Private SSH key material', regex: /-----BEGIN (?:OPENSSH|RSA|EC|DSA|PRIVATE) KEY-----[\s\S]{20,}?-----END [A-Z]+ KEY-----/g, severity: 'critical' },
+            { name: 'Git config secret assignment', regex: /(?:password|passwd|secret|token|api[_-]?key)\s*[=:\"]\s*[^\s\"]{6,}/gi, severity: 'high' }
         ];
 
         // --- Universal filesystem/container fingerprints ---
@@ -1141,11 +1154,11 @@
         function loadPatterns(mode) {
             try {
                 const stored = localStorage.getItem(`customPatterns_${mode}`);
-                if (!stored) return mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+                if (!stored) return mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
                 const parsed = JSON.parse(stored);
-                return Array.isArray(parsed) ? parsed : (mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS);
+                return Array.isArray(parsed) ? parsed : (mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS);
             } catch {
-                return mode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+                return mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
             }
         }
 
@@ -2233,7 +2246,7 @@
             };
         }
 
-        async function scanGitHistory(targets, generation) {
+        async function scanGitHistory(targets, generation, gitMode = false) {
             if (!window.git) {
                 logStatus('Git history engine unavailable: isomorphic-git failed to load.', 'error', true);
                 return;
@@ -2244,7 +2257,7 @@
                 return;
             }
             const requestedDepth = Number(gitHistoryDepth.value);
-            const maxCommits = Number.isFinite(requestedDepth) && requestedDepth > 0 ? requestedDepth : 0;
+            const maxCommits = gitMode ? 0 : (Number.isFinite(requestedDepth) && requestedDepth > 0 ? requestedDepth : 0);
             let repoIndex = 0;
             const globalSeenBlobs = new Set();
             const historyWorkerEntry = createWorker();
@@ -2262,18 +2275,39 @@
                     }
 
                     logStatus(`Git history: opening repository ${repo.root || '/'}.`, 'info', true);
-                    let commits;
+                    let refs = ['HEAD'];
                     try {
-                        const logOptions = { fs: virtualFs, dir: '/', gitdir: gitDir, ref: 'HEAD', includeChanges: true };
-                        // depth=0 means unlimited: omit the depth option so isomorphic-git
-                        // walks all commits reachable from HEAD in the local object database.
-                        if (maxCommits > 0) logOptions.depth = maxCommits;
-                        commits = await git.log(logOptions);
+                        const branches = await git.listBranches({ fs: virtualFs, dir: '/', gitdir: gitDir });
+                        for (const branch of (branches || [])) if (branch && !refs.includes(branch)) refs.push(branch);
                     } catch (error) {
-                        logStatus(`Git history ERROR ${repo.root}: ${error.message}`, 'error', true);
-                        continue;
+                        logStatus(`Git refs: local branch enumeration failed: ${error.message}`, 'warn', true);
                     }
-                    logStatus(`Git history: ${commits.length} commit${commits.length === 1 ? '' : 's'} loaded from HEAD${maxCommits === 0 ? ' (unlimited depth)' : ` (depth ${maxCommits})`}.`, 'success', true);
+                    try {
+                        const tags = await git.listTags({ fs: virtualFs, dir: '/', gitdir: gitDir });
+                        for (const tag of (tags || [])) if (tag && !refs.includes(tag)) refs.push(tag);
+                    } catch (error) {
+                        logStatus(`Git refs: tag enumeration failed: ${error.message}`, 'warn', true);
+                    }
+                    if (gitHistoryVerboseToggle.checked || verbose) logStatus(`git: discovered ${refs.length} ref${refs.length === 1 ? '' : 's'} (${refs.join(', ').slice(0, 500)}).`, 'verbose');
+
+                    const commitsByOid = new Map();
+                    for (const ref of refs) {
+                        if (generation !== scanGeneration) return;
+                        try {
+                            const logOptions = { fs: virtualFs, dir: '/', gitdir: gitDir, ref, includeChanges: true };
+                            // depth=0 means unlimited: omit the depth option so isomorphic-git
+                            // walks all commits reachable from this ref.
+                            if (maxCommits > 0) logOptions.depth = maxCommits;
+                            const refCommits = await git.log(logOptions);
+                            for (const commit of (refCommits || [])) if (!commitsByOid.has(commit.oid)) commitsByOid.set(commit.oid, { ...commit, refs: [ref] });
+                            logStatus(`git: ${ref} -> ${(refCommits || []).length} reachable commit${(refCommits || []).length === 1 ? '' : 's'}.`, 'verbose');
+                        } catch (error) {
+                            logStatus(`Git ref ERROR ${repo.root} ${ref}: ${error.message}`, 'warn', true);
+                        }
+                    }
+                    const commits = [...commitsByOid.values()];
+                    logStatus(`Git history: ${commits.length} unique commit${commits.length === 1 ? '' : 's'} loaded from ${refs.length} ref${refs.length === 1 ? '' : 's'}${maxCommits === 0 ? ' (unlimited depth)' : ` (depth ${maxCommits} per ref)`}.`, 'success', true);
+                    if (gitMode) logStatus(`.git mode: logical repository reconstruction enabled across HEAD, branches, and tags.`, 'info', true);
                     let commitNo = 0;
                     for (const commit of commits) {
                         if (generation !== scanGeneration) return;
@@ -2366,10 +2400,48 @@
             setProgress(0, 'Preparing target set');
             logStatus(`Starting ${activeMode} scan with ${currentPatterns.length} patterns.`, 'info', true);
 
-            const normalized = Array.from(files || []).filter(Boolean);
+            let normalized = Array.from(files || []).filter(Boolean);
             if (!normalized.length) {
                 scanInProgress = false; updateFileSummary(); setEngineStatus('IDLE'); setProgress(0, 'No targets'); return;
             }
+
+            // .git repositories are frequently downloaded as .zip files from CTF challenges.
+            // Expand those archives first so the Git virtual filesystem can see .git/HEAD,
+            // refs, objects and packfiles just like a real local repository directory.
+            if (activeMode === 'git' && window.JSZip) {
+                const expanded = [];
+                for (const file of normalized) {
+                    if (!/\.zip$/i.test(file.name || '')) continue;
+                    try {
+                        logStatus(`.git mode: opening repository archive ${file.name}.`, 'info', true);
+                        const zip = await window.JSZip.loadAsync(file);
+                        const entries = Object.values(zip.files).filter(e => !e.dir);
+                        let added = 0;
+                        for (const e of entries) {
+                            if (generation !== scanGeneration) return;
+                            const entryName = String(e.name || '').replace(/\\/g, '/').replace(/^\/+/, '');
+                            if (!/(?:^|\/)\.git(?:\/|$)/i.test('/' + entryName)) continue;
+                            const blob = await e.async('blob');
+                            if (blob.size > 50 * 1024 * 1024) {
+                                logStatus(`SKIP ${entryName}: extracted Git file exceeds 50 MB.`, 'warn', true);
+                                continue;
+                            }
+                            const virtualFile = new File([blob], entryName.split('/').pop() || 'git-object', { type: 'application/octet-stream' });
+                            virtualFile._secretburrowRelativePath = entryName;
+                            expanded.push(virtualFile);
+                            added++;
+                        }
+                        logStatus(`.git archive ${file.name}: imported ${added} .git file entr${added === 1 ? 'y' : 'ies'}.`, 'success', true);
+                    } catch (error) {
+                        logStatus(`.git archive error ${file.name}: ${error.message}`, 'error', true);
+                    }
+                }
+                if (expanded.length) {
+                    const plain = normalized.filter(file => !/\.zip$/i.test(file.name || ''));
+                    normalized = [...plain, ...expanded];
+                }
+            }
+
             let completed = 0;
             const baseTargets = [];
             for (const file of normalized) {
@@ -2382,6 +2454,58 @@
             }
             logStatus(`Queued ${baseTargets.length} target file${baseTargets.length === 1 ? '' : 's'}.`, 'success', true);
             setProgress(4, `0 / ${baseTargets.length} root targets analyzed`);
+
+            if (activeMode === 'git') {
+                const repos = detectGitRepos(baseTargets);
+                if (!repos.length) {
+                    logStatus('.git mode requires a selected .git directory or repository folder containing .git.', 'error', true);
+                    scanInProgress = false;
+                    updateFileSummary();
+                    setEngineStatus('IDLE');
+                    setProgress(0, 'No .git repository detected');
+                    return;
+                }
+                logStatus(`.git mode: ${repos.length} Git repository${repos.length === 1 ? '' : 'ies'} detected.`, 'success', true);
+                // Scan human-readable Git metadata directly: config, refs, packed-refs,
+                // HEAD and reflogs. Object contents are reconstructed through git.walk below.
+                const metadataTargets = baseTargets.filter(t => {
+                    const p = normalizeRepoPath(t.displayName).toLowerCase();
+                    return /\/\.git\/(?:config|head|description|packed-refs|refs\/|logs\/)/i.test(p);
+                });
+                if (metadataTargets.length) {
+                    const metaWorker = createWorker();
+                    try {
+                        for (let i = 0; i < metadataTargets.length; i++) {
+                            if (generation !== scanGeneration) return;
+                            const target = metadataTargets[i];
+                            logStatus(`.git metadata: scanning ${target.displayName}`, 'info', true);
+                            try {
+                                const r = await runWorkerTask(metaWorker, target, `git-meta-${i}`, false);
+                                (r.results || []).forEach(addResult);
+                                (r.errors || []).forEach(e => logStatus(`Git metadata regex error ${target.displayName}: ${e}`, 'error', true));
+                            } catch (error) {
+                                logStatus(`.git metadata worker failed for ${target.displayName}: ${error.message}`, 'warn', true);
+                            }
+                        }
+                    } finally {
+                        metaWorker.worker.terminate();
+                        URL.revokeObjectURL(metaWorker.url);
+                    }
+                }
+                setProgress(18, '.git object database • reconstructing refs');
+                try {
+                    await scanGitHistory(baseTargets, generation, true);
+                } catch (error) {
+                    logStatus(`.git mode fatal error: ${error.message}`, 'error', true);
+                }
+                if (generation !== scanGeneration) return;
+                scanInProgress = false;
+                updateFileSummary();
+                setProgress(100, `Complete • .git repository reconstructed • ${totalFindings} finding${totalFindings === 1 ? '' : 's'}`);
+                setEngineStatus(totalFindings ? 'FINDINGS' : 'CLEAN', totalFindings ? 'danger' : 'success');
+                logStatus(`.git mode complete. ${totalFindings} exposure${totalFindings === 1 ? '' : 's'} detected across reconstructed Git history.`, totalFindings ? 'warn' : 'success', true);
+                return;
+            }
 
             const cores = navigator.hardwareConcurrency || 4;
             const memoryGB = navigator.deviceMemory || 8;
@@ -2603,8 +2727,19 @@
 
         // Tabs
         function updateGitHistoryControls() {
-            const show = activeMode === 'code';
+            const show = activeMode === 'code' || activeMode === 'git';
             gitHistoryControls.classList.toggle('hidden', !show);
+            const title = document.getElementById('git-history-title');
+            const label = document.getElementById('git-history-scan-label');
+            const help = document.getElementById('git-history-scan-help');
+            const isGit = activeMode === 'git';
+            if (title) title.textContent = isGit ? '🧬 Git Object Database Analysis' : '🕰️ Git History Analysis';
+            if (label) label.textContent = isGit ? 'Rebuild and scan Git history' : 'Scan previous Git versions';
+            if (help) help.textContent = isGit
+                ? 'Read the local .git object database and reconstruct commits, trees, branches, and tags in the browser. No Git server is contacted.'
+                : 'Read the local .git object database, walk commit trees, reconstruct historical snapshots logically, and scan unique historical blobs for leaks.';
+            gitHistoryScanToggle.disabled = isGit;
+            if (isGit) gitHistoryScanToggle.checked = true;
         }
 
         gitHistoryScanToggle.checked = localStorage.getItem('secretburrow_git_history') === '1';
@@ -2636,11 +2771,13 @@
                 currentPatterns = loadPatterns(activeMode);
                 modeSubtext.textContent = activeMode === 'code'
                     ? 'Recursive source/config/archive analysis with multiple encodings and archive formats'
-                    : 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings';
-                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : 'Firmware';
+                    : activeMode === 'firmware'
+                        ? 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings'
+                        : 'Git object-database reconstruction: commits, trees, blobs, branches, tags, refs, and leaked secrets';
+                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : '.git Object Database';
                 patternsInput.value = JSON.stringify(currentPatterns, null, 2);
                 updateGitHistoryControls();
-                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : 'Firmware'} mode.`, 'info', true);
+                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : '.git Object Database'} mode.`, 'info', true);
             });
         });
 
@@ -2768,7 +2905,7 @@
         });
         document.getElementById('reset-settings').addEventListener('click', () => {
             localStorage.removeItem(`customPatterns_${activeMode}`);
-            currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : FIRMWARE_PATTERNS;
+            currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : activeMode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
             patternsInput.value = JSON.stringify(currentPatterns, null, 2);
             logStatus(`Reset ${activeMode} to factory default patterns.`, 'warn', true);
         });
