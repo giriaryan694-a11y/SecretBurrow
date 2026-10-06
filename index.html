@@ -1129,6 +1129,9 @@
         let findingKeys = new Set();
         let findingsSearch = '';
         let activeFindingCategory = 'All';
+        let findingsRenderTimer = null;
+        const MAX_STORED_FINDINGS = 20000;
+        const MAX_RENDERED_FINDINGS = 1200;
         let scanInProgress = false;
         let scanGeneration = 0;
         let verbose = localStorage.getItem('secretburrow_verbose') === '1';
@@ -1213,7 +1216,16 @@
             scanBtn.disabled = selectedFiles.length === 0 || scanInProgress;
         }
 
+        function scheduleFindingsRender(delay = 120) {
+            if (findingsRenderTimer !== null) return;
+            findingsRenderTimer = setTimeout(() => {
+                findingsRenderTimer = null;
+                renderFindings();
+            }, delay);
+        }
+
         function resetResults() {
+            if (findingsRenderTimer !== null) { clearTimeout(findingsRenderTimer); findingsRenderTimer = null; }
             totalFindings = 0;
             findings = [];
             findingKeys = new Set();
@@ -1261,15 +1273,16 @@
         }
 
         function addResult(result) {
+            if (findings.length >= MAX_STORED_FINDINGS) return;
             const item = normalizedFinding(result);
             const dedupeKey = [item.type, item.file, item.encoding, item.offset, item.match].join('|');
             if (findingKeys.has(dedupeKey)) return;
             findingKeys.add(dedupeKey);
             findings.push(item);
             totalFindings = findings.length;
-            resultCount.textContent = `${totalFindings} FINDING${totalFindings === 1 ? '' : 'S'}`;
+            resultCount.textContent = `${totalFindings}${totalFindings >= MAX_STORED_FINDINGS ? '+' : ''} FINDING${totalFindings === 1 ? '' : 'S'}`;
             resultCount.classList.add('danger');
-            renderFindings();
+            scheduleFindingsRender();
         }
 
         function getFindingCategories() {
@@ -1325,9 +1338,11 @@
 
         function renderFindings() {
             renderCategoryBar();
-            const visible = getVisibleFindings();
+            const allVisible = getVisibleFindings();
+            const visible = allVisible.slice(0, MAX_RENDERED_FINDINGS);
             const categoryLabel = activeFindingCategory === 'All' ? 'all categories' : activeFindingCategory;
-            findingsMeta.textContent = `${visible.length} of ${findings.length} finding${findings.length === 1 ? '' : 's'} shown • ${categoryLabel}`;
+            const renderNote = allVisible.length > visible.length ? ` • showing first ${visible.length.toLocaleString()} of ${allVisible.length.toLocaleString()}` : '';
+            findingsMeta.textContent = `${allVisible.length} of ${findings.length} finding${findings.length === 1 ? '' : 's'} shown • ${categoryLabel}${renderNote}`;
             if (!visible.length) {
                 resultsContainer.innerHTML = `
                     <div class="empty-state">
@@ -1511,7 +1526,7 @@
                     const scanText = text.length > WORKER_MAX_STRING_SCAN ? text.slice(0, WORKER_MAX_STRING_SCAN) : text;
                     const lineStarts = makeLineIndex(scanText);
                     for (const p of patterns) {
-                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        if (results.length >= maxResults) break;
                         if (isRiskyRegex(p.regex)) {
                             if (errors.length < WORKER_MAX_ERRORS) errors.push((p.name || 'unnamed') + ': skipped potentially expensive regex');
                             continue;
@@ -1542,19 +1557,19 @@
                     }
                 }
 
-                function decodeHex(s) {
+                function decodeHex(s, maxOutput = 120000) {
                     if (s.length < 8 || s.length % 2) return null;
-                    const out = new Uint8Array(Math.min(s.length / 2, 120000));
+                    const out = new Uint8Array(Math.min(s.length / 2, maxOutput));
                     for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
                     return out;
                 }
 
-                function base64Decode(s) {
+                function base64Decode(s, maxOutput = 12000000) {
                     try {
                         if (s.length > 160000) return null;
                         const normalized = s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=');
                         const bin = atob(normalized);
-                        if (bin.length > 12000000) return null;
+                        if (bin.length > maxOutput) return null;
                         const out = new Uint8Array(bin.length);
                         for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
                         return out;
@@ -1620,7 +1635,7 @@
                         ['URL / Endpoint', /\\b(?:https?|wss?|ftp):\\/\\/[^\\s\"'<>]+/gi]
                     ];
                     for (const [name, rx] of patterns) {
-                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        if (results.length >= maxResults) break;
                         let m; let hits = 0;
                         while ((m = rx.exec(text)) !== null && hits < 40) {
                             push(name, m[0], text.slice(Math.max(0,m.index-60), Math.min(text.length,m.index+240)).trim(), 'Sensitive Material', /password|credential|token|api|secret|private/i.test(name) ? 'high' : 'medium', offsetBase + m.index);
@@ -1674,9 +1689,14 @@
                     });
                 }
 
-                function scanStringCandidates(text, fileName, offset, encoding, patterns, results, errors) {
+                function scanStringCandidates(text, fileName, offset, encoding, patterns, results, errors, profile = 'standard') {
                     const seen = new Set();
                     let lowConfidenceNotices = 0;
+                    const isApk = profile === 'apk';
+                    const maxCandidatesBudget = isApk ? 350 : WORKER_MAX_DECODED_CANDIDATES;
+                    const maxCandidateLength = isApk ? 32000 : 160000;
+                    const maxDecodedOutput = isApk ? 512000 : 12000000;
+                    const decodeText = isApk ? text.slice(0, 60000) : text;
                     const pushDecoded = (decodedText, decoderName, confidence, originalCandidate) => {
                         if (!decodedText || results.length >= WORKER_MAX_RESULTS) return;
                         const key = decoderName + '|' + decodedText.slice(0, 160);
@@ -1687,13 +1707,13 @@
                         heuristicFindings(decodedText, fileName, offset, decoderName, 0, decodedText.length, results);
                     };
 
-                    const maxCandidates = Math.min(WORKER_MAX_DECODED_CANDIDATES, Math.floor(text.length / 12));
+                    const maxCandidates = Math.min(maxCandidatesBudget, Math.floor(text.length / 12));
                     let checked = 0;
-                    const candidates = text.match(/[A-Za-z0-9+/_=-]{20,}/g) || [];
+                    const candidates = decodeText.match(/[A-Za-z0-9+/_=-]{20,}/g) || [];
                     for (const candidate of candidates) {
                         if (checked++ >= maxCandidates || results.length >= WORKER_MAX_RESULTS) break;
-                        if (candidate.length <= 160000 && /[+/_=-]/.test(candidate)) {
-                            const b64 = base64Decode(candidate);
+                        if (candidate.length <= maxCandidateLength && /[+/_=-]/.test(candidate)) {
+                            const b64 = base64Decode(candidate, maxDecodedOutput);
                             const b64Score = scoreBase64Candidate(candidate, b64);
                             if (b64 && b64Score >= 0.78) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b64), 'base64-decoded', b64Score, candidate);
                             else if (b64 && b64Score >= 0.48 && lowConfidenceNotices < 24) {
@@ -1709,10 +1729,10 @@
                             lowConfidenceNotices++;
                         }
                     }
-                    const hexCandidates = text.match(/\b[0-9A-Fa-f]{16,240000}\b/g) || [];
+                    const hexCandidates = decodeText.match(/\b[0-9A-Fa-f]{16,240000}\b/g) || [];
                     for (const hc of hexCandidates.slice(0, 1000)) {
                         if (results.length >= WORKER_MAX_RESULTS) break;
-                        const decoded = decodeHex(hc.slice(0, 240000));
+                        const decoded = decodeHex(hc.slice(0, isApk ? 120000 : 240000), isApk ? 60000 : 120000);
                         if (decoded && printableRatio(decoded) > 0.60) {
                             const ratio = printableRatio(decoded);
                             const confidence = ratio > 0.90 ? 0.96 : ratio > 0.75 ? 0.88 : 0.72;
@@ -1720,16 +1740,19 @@
                             else if (lowConfidenceNotices < 24) { addEncodingNotice(results, fileName, offset, 'hex candidate', hc, confidence, 'Hex-like data detected but text confidence is low.'); lowConfidenceNotices++; }
                         }
                     }
-                    const escaped = decodeEscaped(text);
+                    const escaped = decodeEscaped(decodeText);
                     if (escaped) pushDecoded(escaped, 'escaped-decoded', 0.98, '\\\\x/\\\\u escaped text');
-                    const percent = decodePercent(text);
+                    const percent = decodePercent(decodeText);
                     if (percent) pushDecoded(percent, 'percent-decoded', 0.98, 'URL percent-encoded text');
                 }
 
-                function processBytes(bytes, fileName, patterns, minStringLen, recovery = false) {
+                function processBytes(bytes, fileName, patterns, minStringLen, recovery = false, profile = 'standard') {
                     const results = [], errors = [], telemetry = [], signatures = [];
-                    const maxStrings = recovery ? 5000 : WORKER_MAX_STRINGS;
-                    const maxStringScan = recovery ? WORKER_MAX_RECOVERY_SCAN : WORKER_MAX_STRING_SCAN;
+                    const isApk = profile === 'apk';
+                    const maxStrings = isApk ? 6000 : (recovery ? 5000 : WORKER_MAX_STRINGS);
+                    const maxStringScan = isApk ? 180000 : (recovery ? WORKER_MAX_RECOVERY_SCAN : WORKER_MAX_STRING_SCAN);
+                    const maxResults = isApk ? 1800 : (recovery ? 1200 : WORKER_MAX_RESULTS);
+                    const maxUtf8Bytes = isApk ? Math.min(bytes.length, 4 * 1024 * 1024) : Math.min(bytes.length, ${MAX_DECODE_BYTES});
                     telemetry.push('Binary size: ' + bytes.length.toLocaleString() + ' bytes');
                     const entropyWindow = 65536;
                     let highEntropy = 0;
@@ -1741,6 +1764,7 @@
                     const sigs = ${JSON.stringify(MAGIC_SIGNATURES)};
                     for (const sig of sigs) {
                         for (let i = 0; i <= bytes.length - sig.bytes.length; i++) {
+                            if (bytes[i] !== sig.bytes[0]) continue;
                             let ok = true;
                             for (let j = 0; j < sig.bytes.length; j++) if (bytes[i+j] !== sig.bytes[j]) { ok = false; break; }
                             if (ok) { signatures.push({ name: sig.name, kind: sig.kind, offset: i }); if (signatures.length < 30) telemetry.push('Signature: ' + sig.name + ' @ 0x' + i.toString(16)); break; }
@@ -1749,18 +1773,18 @@
 
                     let emittedStrings = 0;
                     const emit = s => {
-                        if (results.length >= (recovery ? 1200 : WORKER_MAX_RESULTS)) return;
+                        if (results.length >= maxResults) return;
                         emittedStrings++;
                         if (emittedStrings > maxStrings || s.text.length < minStringLen) return;
                         const clipped = s.text.length > maxStringScan ? s.text.slice(0, maxStringScan) : s.text;
                         scanText(clipped, fileName, patterns, s.offset, s.encoding, results, errors);
                         heuristicFindings(clipped, fileName, s.offset, s.encoding, 0, bytes.length, results);
-                        if (!recovery && clipped.length >= 20) scanStringCandidates(clipped, fileName, s.offset, s.encoding, patterns, results, errors);
+                        if (clipped.length >= 20 && (!recovery || isApk)) scanStringCandidates(clipped, fileName, s.offset, s.encoding, patterns, results, errors, isApk ? 'apk' : 'standard');
                     };
                     asciiStrings(bytes, minStringLen, emit);
-                    utf16Strings(bytes, true, minStringLen, emit, recovery ? 5000 : 12000);
-                    utf16Strings(bytes, false, minStringLen, emit, recovery ? 5000 : 12000);
-                    if (!recovery) {
+                    utf16Strings(bytes, true, minStringLen, emit, isApk ? 6000 : (recovery ? 5000 : 12000));
+                    utf16Strings(bytes, false, minStringLen, emit, isApk ? 6000 : (recovery ? 5000 : 12000));
+                    if (!recovery && !isApk) {
                         utf32Strings(bytes, true, minStringLen, emit, 6000);
                         utf32Strings(bytes, false, minStringLen, emit, 6000);
                     }
@@ -1769,22 +1793,22 @@
                     // Chunked UTF-8 scanning avoids building one giant string for large binaries.
                     const decoder = new TextDecoder('utf-8', { fatal: false });
                     let carry = '';
-                    for (let off = 0; off < Math.min(bytes.length, ${MAX_DECODE_BYTES}); off += WORKER_TEXT_CHUNK) {
-                        const end = Math.min(bytes.length, off + WORKER_TEXT_CHUNK);
-                        let chunk = decoder.decode(bytes.subarray(off, end), { stream: end < bytes.length && end < ${MAX_DECODE_BYTES} });
+                    for (let off = 0; off < maxUtf8Bytes; off += WORKER_TEXT_CHUNK) {
+                        const end = Math.min(maxUtf8Bytes, off + WORKER_TEXT_CHUNK);
+                        let chunk = decoder.decode(bytes.subarray(off, end), { stream: end < maxUtf8Bytes });
                         chunk = carry + chunk;
                         const scanBase = Math.max(0, off - carry.length);
-                        if (chunk.length > WORKER_TEXT_OVERLAP && end < Math.min(bytes.length, ${MAX_DECODE_BYTES})) {
+                        if (chunk.length > WORKER_TEXT_OVERLAP && end < maxUtf8Bytes) {
                             carry = chunk.slice(-WORKER_TEXT_OVERLAP);
                             chunk = chunk.slice(0, -WORKER_TEXT_OVERLAP);
                         } else carry = '';
                         scanText(chunk, fileName, patterns, scanBase, 'UTF-8', results, errors);
                         heuristicFindings(chunk, fileName, scanBase, 'UTF-8', highEntropy, bytes.length, results);
-                        if (results.length >= WORKER_MAX_RESULTS) break;
+                        if (results.length >= maxResults) break;
                     }
-                    if (carry && results.length < WORKER_MAX_RESULTS) {
-                        scanText(carry, fileName, patterns, Math.max(0, Math.min(bytes.length, ${MAX_DECODE_BYTES}) - carry.length), 'UTF-8', results, errors);
-                        heuristicFindings(carry, fileName, Math.max(0, Math.min(bytes.length, ${MAX_DECODE_BYTES}) - carry.length), 'UTF-8', highEntropy, bytes.length, results);
+                    if (carry && results.length < maxResults) {
+                        scanText(carry, fileName, patterns, Math.max(0, maxUtf8Bytes - carry.length), 'UTF-8', results, errors);
+                        heuristicFindings(carry, fileName, Math.max(0, maxUtf8Bytes - carry.length), 'UTF-8', highEntropy, bytes.length, results);
                     }
                     return { results, errors: errors.slice(0, WORKER_MAX_ERRORS), telemetry, signatures, highEntropyWindows: highEntropy };
                 }
@@ -1793,9 +1817,9 @@
                     const taskId = e?.data?.taskId;
                     try {
                         if (!e?.data?.buffer) throw new Error('No ArrayBuffer received');
-                        const { buffer, patterns = [], fileName = 'unknown', minStringLen = 4, recovery = false } = e.data;
+                        const { buffer, patterns = [], fileName = 'unknown', minStringLen = 4, recovery = false, profile = 'standard' } = e.data;
                         const bytes = new Uint8Array(buffer);
-                        const result = processBytes(bytes, fileName, Array.isArray(patterns) ? patterns.slice(0, recovery ? 100 : 500) : [], Math.max(3, Math.min(12, minStringLen)), recovery);
+                        const result = processBytes(bytes, fileName, Array.isArray(patterns) ? patterns.slice(0, recovery ? 100 : (profile === 'apk' ? 350 : 500)) : [], Math.max(3, Math.min(12, minStringLen)), recovery, profile);
                         postSafe({ taskId, ...result, fatal: false });
                     } catch (err) {
                         postSafe({ taskId, results: [], errors: [err?.stack || err?.message || String(err)], telemetry: [], signatures: [], highEntropyWindows: 0, fatal: true, fatalError: err?.message || String(err) });
@@ -2155,12 +2179,12 @@
             entry.url = fresh.url;
         }
 
-        async function runWorkerTask(entry, target, taskId, recovery = false) {
+        async function runWorkerTask(entry, target, taskId, recovery = false, profile = 'standard') {
             let lastError = null;
             for (let attempt = 0; attempt < 2; attempt++) {
                 if (attempt > 0) {
                     replaceWorker(entry);
-                    logStatus(`${target.displayName}: retrying in a fresh worker using ${recovery ? 'recovery' : 'standard'} scan profile.`, 'warn', true);
+                    logStatus(`${target.displayName}: retrying in a fresh worker using ${profile === 'apk' ? 'APK-safe' : (recovery ? 'recovery' : 'standard')} scan profile.`, 'warn', true);
                 }
                 try {
                     const data = new Uint8Array(await target.file.arrayBuffer());
@@ -2192,7 +2216,7 @@
                         timer = setTimeout(() => finish(reject, new Error(`worker timeout after ${WORKER_TASK_TIMEOUT_MS / 1000}s`)), WORKER_TASK_TIMEOUT_MS);
                         try {
                             logStatus(`verbose:${target.displayName}: transferring ${data.byteLength.toLocaleString()} bytes to worker.`, 'verbose');
-                            entry.worker.postMessage({ taskId, buffer: data.buffer, patterns: currentPatterns, fileName: target.displayName, minStringLen: 4, recovery }, [data.buffer]);
+                            entry.worker.postMessage({ taskId, buffer: data.buffer, patterns: currentPatterns, fileName: target.displayName, minStringLen: 4, recovery, profile }, [data.buffer]);
                         } catch (error) {
                             finish(reject, error);
                         }
@@ -2463,44 +2487,74 @@
             return lower.includes('androidmanifest.xml') && lower.some(n => /^classes\d*\.dex$/.test(n));
         }
 
-        async function scanApkPackage(file, generation) {
+        async function scanApkPackage(file, generation, onEntry) {
             if (!window.JSZip) throw new Error('JSZip unavailable');
             const label = file.name || 'APK';
             logStatus(`APK mode: opening ${label}.`, 'info', true);
-            const zip = await window.JSZip.loadAsync(file);
+            const zip = await window.JSZip.loadAsync(file, { checkCRC32: false, createFolders: false });
             const fileEntries = Object.values(zip.files).filter(e => !e.dir);
             const names = fileEntries.map(e => e.name);
             if (!isApkEntrySet(names)) {
                 logStatus(`APK probe: ${label} does not have a complete Android package signature (AndroidManifest.xml + classes*.dex).`, 'warn', true);
-                return { apk: false, entries: [] };
+                return { apk: false, scanned: 0, totalBytes: 0 };
             }
             const dexCount = names.filter(n => /^classes\d*\.dex$/i.test(String(n).split('/').pop())).length;
             const assetCount = names.filter(n => /(^|\/)assets\//i.test(n)).length;
             const nativeCount = names.filter(n => /(^|\/)lib\/[^/]+\/[^/]+\.so$/i.test(n)).length;
             logStatus(`APK detected: ${label} • ${fileEntries.length} files • ${dexCount} DEX • ${assetCount} assets • ${nativeCount} native libraries.`, 'success', true);
-            logStatus('APK data remains local to this browser session. Decoding and secret analysis happen client-side.', 'info', true);
-            const outputs=[]; let totalBytes=0; const limit=24000;
-            for(let i=0;i<fileEntries.length && i<limit;i++){
-                if(generation!==scanGeneration) return {apk:true,entries:outputs};
-                const e=fileEntries[i], pathname=String(e.name||'').replace(/\\/g,'/');
-                try{
-                    const blob=await e.async('blob');
-                    if(blob.size>50*1024*1024){logStatus(`APK skip: ${pathname} exceeds 50 MB.`,'warn',true);continue;}
-                    totalBytes+=blob.size;
-                    if(totalBytes>MAX_EXPANDED_BYTES){logStatus('APK extraction stopped at the expanded-data safety limit.','warn',true);break;}
-                    outputs.push({name:`${label} :: ${pathname}`,data:new Uint8Array(await blob.arrayBuffer())});
-                    if(verbose && (i<250 || /(?:AndroidManifest.xml|classes\d*\.dex|assets\/|res\/raw|\.(?:json|xml|properties|js|so|txt))$/i.test(pathname))) logStatus(`verbose: APK entry ${pathname} (${blob.size.toLocaleString()} bytes).`, 'verbose');
-                }catch(error){logStatus(`APK entry read failed ${pathname}: ${error.message}`,'warn',true);}
-                if(i%25===0 || i===fileEntries.length-1) setProgress(Math.min(70,8+((i+1)/Math.max(1,fileEntries.length))*55),`APK package • ${i+1}/${fileEntries.length} entries`);
+            logStatus('APK data remains local to this browser session. Entries are extracted and scanned sequentially to keep peak memory bounded.', 'info', true);
+            let scanned = 0, totalBytes = 0;
+            const APK_SCAN_CHUNK = 16 * 1024 * 1024;
+            const priority = name => {
+                const base = String(name || '').split('/').pop().toLowerCase();
+                if (base === 'androidmanifest.xml') return 0;
+                if (/^classes\d*\.dex$/.test(base)) return 1;
+                if (/\.(?:json|xml|properties|ini|cfg|conf|txt|yml|yaml|js|ts)$/.test(base)) return 2;
+                if (/(^|\/)assets\//.test(String(name || ''))) return 3;
+                if (/\.so$/.test(base)) return 4;
+                return 5;
+            };
+            const entries = fileEntries.map((entry, index) => ({ entry, index, priority: priority(entry.name) }))
+                .sort((a, b) => a.priority - b.priority || a.index - b.index);
+            for (let i = 0; i < entries.length; i++) {
+                if (generation !== scanGeneration) return { apk: true, scanned, totalBytes };
+                const e = entries[i].entry;
+                const pathname = String(e.name || '').replace(/\\/g, '/');
+                try {
+                    const blob = await e.async('blob');
+                    if (blob.size > 50 * 1024 * 1024) {
+                        logStatus(`APK skip: ${pathname} exceeds 50 MB.`, 'warn', true);
+                        continue;
+                    }
+                    totalBytes += blob.size;
+                    if (totalBytes > MAX_EXPANDED_BYTES) {
+                        logStatus(`APK extraction stopped at the ${Math.round(MAX_EXPANDED_BYTES / 1024 / 1024)} MB expanded-data safety limit.`, 'warn', true);
+                        break;
+                    }
+                    if (verbose && (i < 250 || /(?:AndroidManifest.xml|classes\d*\.dex|assets\/|res\/raw|\.(?:json|xml|properties|js|so|txt))$/i.test(pathname))) {
+                        logStatus(`verbose: APK entry ${pathname} (${blob.size.toLocaleString()} bytes).`, 'verbose');
+                    }
+                    const chunks = Math.max(1, Math.ceil(blob.size / APK_SCAN_CHUNK));
+                    for (let chunkNo = 0; chunkNo < chunks; chunkNo++) {
+                        if (generation !== scanGeneration) return { apk: true, scanned, totalBytes };
+                        const start = chunkNo * APK_SCAN_CHUNK;
+                        const end = Math.min(blob.size, start + APK_SCAN_CHUNK);
+                        const chunk = chunks === 1 ? blob : blob.slice(start, end);
+                        const suffix = chunks === 1 ? '' : ` [chunk ${chunkNo + 1}/${chunks} • 0x${start.toString(16)}-0x${(end - 1).toString(16)}]`;
+                        const target = { file: chunk, displayName: `${label} :: ${pathname}${suffix}` };
+                        await onEntry(target, { index: i, total: entries.length, path: pathname, chunkNo, chunks, start, end });
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                    scanned++;
+                } catch (error) {
+                    logStatus(`APK entry read/scan failed ${pathname}: ${error.message}`, 'warn', true);
+                }
+                if (i % 5 === 0 || i === entries.length - 1) {
+                    setProgress(Math.min(99, 8 + ((i + 1) / Math.max(1, entries.length)) * 90), `APK deep scan • ${i + 1}/${entries.length} entries`);
+                }
             }
-            const manifest=outputs.find(e=>/:: AndroidManifest\.xml$/i.test(e.name));
-            if(manifest){
-                const text=decodeUtf8(manifest.data); const pkg=text.match(/\bpackage\s*=\s*["']([^"']+)["']/i)?.[1];
-                if(pkg) logStatus(`APK manifest package: ${pkg}`,'success',true);
-                else logStatus('APK manifest is binary Android XML (AXML) or not plain XML; byte/string analysis continues.','info',true);
-            }
-            logStatus(`APK extraction complete: ${outputs.length} entries / ${totalBytes.toLocaleString()} bytes queued.`, 'success', true);
-            return {apk:true,entries:outputs};
+            logStatus(`APK scan complete: ${scanned} entries analyzed • ${totalBytes.toLocaleString()} bytes processed.`, 'success', true);
+            return { apk: true, scanned, totalBytes };
         }
 
         async function scanFiles(files, generation) {
@@ -2620,41 +2674,52 @@
             }
 
             if (activeMode === 'apk') {
-                let apkTargets=[];
-                for(const target of baseTargets){
-                    if(generation!==scanGeneration) return;
-                    try{
-                        const result=await scanApkPackage(target.file,generation);
-                        if(result.apk) apkTargets.push(...result.entries);
-                        else {
-                            const raw=new Uint8Array(await target.file.arrayBuffer());
-                            if(hasZipMagic(raw) || looksLikeApkName(target.displayName)) {
-                                logStatus(`APK mode: generic ZIP fallback for ${target.displayName}.`,'warn',true);
-                                apkTargets.push({name:target.displayName,data:raw});
+                let detected = 0;
+                const apkEntryWorker = createWorker();
+                try {
+                    for (let i = 0; i < baseTargets.length; i++) {
+                        if (generation !== scanGeneration) return;
+                        const target = baseTargets[i];
+                        const result = await scanApkPackage(target.file, generation, async (workerTarget, meta) => {
+                            detected++;
+                            logStatus(`APK analyzing ${detected}: ${workerTarget.displayName}`, 'info', true);
+                            let workerResult;
+                            try {
+                                workerResult = await runWorkerTask(apkEntryWorker, workerTarget, `apk-${detected}`, false, 'apk');
+                            } catch (workerError) {
+                                logStatus(`APK recovery: ${workerTarget.displayName} • ${workerError.message}`, 'warn', true);
+                                workerResult = await runWorkerTask(apkEntryWorker, workerTarget, `apk-recovery-${detected}`, true, 'apk');
                             }
+                            (workerResult.results || []).forEach(addResult);
+                            (workerResult.errors || []).forEach(e => logStatus(`APK regex error ${workerTarget.displayName}: ${e}`, 'error', true));
+                            for (const t of (workerResult.telemetry || [])) logStatus(`verbose:${workerTarget.displayName}: ${t}`, 'verbose');
+                            if (meta?.chunks > 1) logStatus(`verbose:${workerTarget.displayName}: bounded 16 MB APK chunk scan; chunk ${meta.chunkNo + 1}/${meta.chunks}.`, 'verbose');
+                        });
+                        if (!result.apk && (hasZipMagic(new Uint8Array(await target.file.arrayBuffer())) || looksLikeApkName(target.displayName))) {
+                            logStatus(`APK mode: ${target.displayName} is not a complete APK signature. Raw ZIP/file scan will be attempted.`, 'warn', true);
                         }
-                    }catch(error){logStatus(`APK package error ${target.displayName}: ${error.message}`,'error',true);}
-                }
-                if(!apkTargets.length){scanInProgress=false;updateFileSummary();setProgress(0,'No APK entries detected');setEngineStatus('IDLE');return;}
-                const cores=navigator.hardwareConcurrency||4, memoryGB=navigator.deviceMemory||8;
-                const recommended=memoryGB<=2?1:memoryGB<=4?Math.min(2,cores):Math.min(4,cores-1);
-                const pool=createWorkerPool(Math.max(1,Math.min(recommended,apkTargets.length))); let nextApk=0;
-                const dispatchApk=async entry=>{
-                    while(generation===scanGeneration){
-                        const index=nextApk++; if(index>=apkTargets.length) return; const target=apkTargets[index];
-                        logStatus(`APK analyzing ${index+1}/${apkTargets.length}: ${target.name}`,'info',true);
-                        const workerTarget={file:new File([target.data],target.name,{type:'application/octet-stream'}),displayName:target.name};
-                        try{
-                            let result; try{result=await runWorkerTask(entry,workerTarget,`apk-${index}`,false);}catch(workerError){logStatus(`APK recovery: ${target.name} • ${workerError.message}`,'warn',true);result=await runWorkerTask(entry,workerTarget,`apk-recovery-${index}`,true);}
-                            (result.results||[]).forEach(addResult); (result.errors||[]).forEach(e=>logStatus(`APK regex error ${target.name}: ${e}`,'error',true));
-                            for(const t of (result.telemetry||[])) logStatus(`verbose:${target.name}: ${t}`,'verbose');
-                        }catch(error){logStatus(`ERROR analyzing APK entry ${target.name}: ${error.message}`,'error',true);}
-                        setProgress(Math.max(70,Math.min(99,70+((index+1)/apkTargets.length)*29)),`APK deep scan • ${index+1}/${apkTargets.length} entries`);
                     }
-                };
-                await Promise.all(pool.map(dispatchApk));
-                pool.forEach(({worker,url})=>{worker.terminate();URL.revokeObjectURL(url);});
-                if(generation!==scanGeneration)return; scanInProgress=false;updateFileSummary();setProgress(100,`Complete • APK package analyzed • ${totalFindings} finding${totalFindings===1?'':'s'}`);setEngineStatus(totalFindings?'FINDINGS':'CLEAN',totalFindings?'danger':'success');logStatus(`APK mode complete. ${totalFindings} exposure${totalFindings===1?'':'s'} detected.`,totalFindings?'warn':'success',true);return;
+                } finally {
+                    apkEntryWorker.worker.terminate();
+                    URL.revokeObjectURL(apkEntryWorker.url);
+                }
+                if (!detected) {
+                    logStatus('No Android APK package was detected.', 'error', true);
+                    scanInProgress = false;
+                    updateFileSummary();
+                    setEngineStatus('IDLE');
+                    setProgress(0, 'No APK package detected');
+                    return;
+                }
+                if (generation !== scanGeneration) return;
+                if (findingsRenderTimer !== null) { clearTimeout(findingsRenderTimer); findingsRenderTimer = null; }
+                renderFindings();
+                scanInProgress = false;
+                updateFileSummary();
+                setProgress(100, `Complete • APK analyzed • ${totalFindings} finding${totalFindings === 1 ? '' : 's'}`);
+                setEngineStatus(totalFindings ? 'FINDINGS' : 'CLEAN', totalFindings ? 'danger' : 'success');
+                logStatus(`APK mode complete. ${totalFindings} exposure${totalFindings === 1 ? '' : 's'} detected.`, totalFindings ? 'warn' : 'success', true);
+                return;
             }
 
             const cores = navigator.hardwareConcurrency || 4;
