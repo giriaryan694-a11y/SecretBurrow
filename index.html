@@ -601,6 +601,7 @@
             <div class="tab-bar">
                 <button class="tab-btn active" data-mode="code">Code Repo Mode</button>
                 <button class="tab-btn" data-mode="firmware">Firmware Mode</button>
+                <button class="tab-btn" data-mode="apk">APK Mode</button>
                 <button class="tab-btn" data-mode="git">.git Mode</button>
             </div>
 
@@ -777,10 +778,10 @@
             { name: "Private Key Header", regex: "-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", flags: "g" },
             { name: "JWT Token", regex: "\\beyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", flags: "g" },
             { name: "URL with Credentials", regex: "https?://[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
-            { name: "Database Connection String", regex: "(?:mongodb|postgres(?:ql)?|mysql|redis|amqp|mssql):\\/\\/[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
+            { name: "URL / Endpoint", regex: "\\b(?:https?|wss?|ftp)://[^\\s\"'<>]+", flags: "gi" },
             { name: ".env Variable", regex: "^[A-Z_0-9]+=[^\\n]{8,}$", flags: "gm" },
             { name: "SSH / Telnet Credential Pair", regex: "\\b(?:root|admin|user)\\s*[:|/]\\s*[^\\s:]{4,}\\b", flags: "gi" },
-            { name: "Cloud Credential Assignment", regex: "(?:aws_access_key_id|aws_secret_access_key|azure_client_secret|azure_storage_key|gcp_credentials|google_application_credentials|client_secret)\s*[:=]\s*['\"]?[^'\"\s]{6,}", flags: "gi" },
+            { name: "Cloud Credential Assignment", regex: "(?:aws_access_key_id|aws_secret_access_key|azure_client_secret|azure_storage_key|gcp_credentials|google_application_credentials|client_secret)\\s*[:=]\\s*['\"]?[^'\"\\s]{6,}", flags: "gi" },
             { name: "Private Key Material", regex: "-----BEGIN (?:[A-Z0-9]+ )?(?:ENCRYPTED )?PRIVATE KEY-----", flags: "g" },
             { name: "Password Hash Marker", regex: "(?:bcrypt|argon2|scrypt|pbkdf2|sha(?:1|224|256|384|512)|md5)\\s*[:$=]\\s*[^\\s]{6,}", flags: "gi" },
             { name: "Encryption / Cipher Configuration", regex: "(?:aes(?:[-_]?128|[-_]?192|[-_]?256)?(?:[-_]?gcm|[-_]?cbc|[-_]?ctr)?|chacha20(?:[-_]?poly1305)?|rsa(?:[-_]?oaep)?|fernet|openssl)\\s*[:=_-]?\\s*[^\\s]{0,80}", flags: "gi" },
@@ -805,6 +806,7 @@
             { name: "AWS Access Key", regex: "\\b(?:A3T8AWJ2V73QXZ|AKIA)[A-Z0-9]{16}\\b", flags: "g" },
             { name: "Private Key Header", regex: "-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", flags: "g" },
             { name: "URL with Credentials", regex: "https?://[^:\\s]+:[^@\\s]+@[^\\s]+", flags: "gi" },
+            { name: "URL / Endpoint", regex: "\\b(?:https?|wss?|ftp)://[^\\s\"'<>]+", flags: "gi" },
             { name: "MAC Address", regex: "(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}", flags: "g" }
         ];
 
@@ -818,6 +820,18 @@
             { name: 'Git remote with embedded credentials', regex: /(?:url|remote).*?(?:https?|ssh|git):\/\/[^\s]+@[^\s]+/gi, severity: 'high' },
             { name: 'Private SSH key material', regex: /-----BEGIN (?:OPENSSH|RSA|EC|DSA|PRIVATE) KEY-----[\s\S]{20,}?-----END [A-Z]+ KEY-----/g, severity: 'critical' },
             { name: 'Git config secret assignment', regex: /(?:password|passwd|secret|token|api[_-]?key)\s*[=:\"]\s*[^\s\"]{6,}/gi, severity: 'high' }
+        ];
+
+        const APK_PATTERNS = [
+            ...CODE_REPO_PATTERNS,
+            { name: "Android API Key / Secret Assignment", regex: "(?:api[_-]?key|api[_-]?secret|client[_-]?id|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token)\\s*[:=]\\s*['\"]?[^'\"\\s]{6,}", flags: "gi" },
+            { name: "Firebase API Key", regex: "\\bAIza[0-9A-Za-z_-]{35}\\b", flags: "g" },
+            { name: "Firebase Project / App Identifier", regex: "(?:google_app_id|project_id|mobilesdk_app_id|gcm_defaultSenderId|storage_bucket)\\s*[:=]\\s*['\"]?[^'\"\\s,}]{4,}", flags: "gi" },
+            { name: "Android Manifest Credential Marker", regex: "(?:android:name|android:value)\\s*=\\s*['\"](?:[^'\"]*(?:api[_-]?key|secret|token|password|client[_-]?id|client[_-]?secret)[^'\"]*)['\"]", flags: "gi" },
+            { name: "WebView / API URL", regex: "\\b(?:https?|wss?)://[^\\s\"'<>]+", flags: "gi" },
+            { name: "APK Debug / Test Credential Marker", regex: "(?:debug_password|test_password|staging[_-]?token|dev[_-]?token|test[_-]?token|internal[_-]?key)\\s*[:=]\\s*['\"]?[^'\"\\s]{4,}", flags: "gi" },
+            { name: "Android Keystore / Signing Material Marker", regex: "(?:keystore|keyStore|storePassword|keyPassword|signingConfig|signingConfigs)\\s*[:=]\\s*['\"]?[^'\"\\s]{4,}", flags: "gi" },
+            { name: "Authorization Header", regex: "\\b(?:Authorization|X-Api-Key|X-Auth-Token)\\s*:\\s*(?:Bearer\\s+)?[^\\s]+", flags: "gi" }
         ];
 
         // --- Universal filesystem/container fingerprints ---
@@ -1154,11 +1168,12 @@
         function loadPatterns(mode) {
             try {
                 const stored = localStorage.getItem(`customPatterns_${mode}`);
-                if (!stored) return mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
+                const defaults = mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : mode === 'apk' ? APK_PATTERNS : GIT_PATTERNS;
+                if (!stored) return defaults;
                 const parsed = JSON.parse(stored);
-                return Array.isArray(parsed) ? parsed : (mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS);
+                return Array.isArray(parsed) ? parsed : defaults;
             } catch {
-                return mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
+                return mode === 'code' ? CODE_REPO_PATTERNS : mode === 'firmware' ? FIRMWARE_PATTERNS : mode === 'apk' ? APK_PATTERNS : GIT_PATTERNS;
             }
         }
 
@@ -1601,7 +1616,8 @@
                         ['PGP Encrypted Block', /-----BEGIN PGP MESSAGE-----[\\s\\S]{0,3000}?-----END PGP MESSAGE-----/g],
                         ['Encrypted Private Key', /-----BEGIN (?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----/g],
                         ['Credential Assignment', /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|username|user)\\s*[=:]\\s*["']?[^\\s"']{4,}/gi],
-                        ['Admin Credential Pair', /\\b(?:admin|root)\\s*[:|/]\\s*[^\\s:|/]{3,}/gi]
+                        ['Admin Credential Pair', /\\b(?:admin|root)\\s*[:|/]\\s*[^\\s:|/]{3,}/gi],
+                        ['URL / Endpoint', /\\b(?:https?|wss?|ftp):\\/\\/[^\\s\"'<>]+/gi]
                     ];
                     for (const [name, rx] of patterns) {
                         if (results.length >= WORKER_MAX_RESULTS) break;
@@ -1623,13 +1639,50 @@
                     }
                 }
 
+                function scoreBase64Candidate(candidate, decoded) {
+                    if (!candidate || !decoded || candidate.length < 16) return 0;
+                    let score = 0.25;
+                    if (candidate.length % 4 === 0) score += 0.15;
+                    if (/^[A-Za-z0-9+/]+={0,2}$/.test(candidate)) score += 0.15;
+                    if (/[+/=]/.test(candidate)) score += 0.08;
+                    const ratio = printableRatio(decoded);
+                    if (ratio > 0.92) score += 0.32;
+                    else if (ratio > 0.78) score += 0.20;
+                    else if (ratio > 0.68) score += 0.10;
+                    if (decoded.length >= 8) score += 0.05;
+                    return Math.min(1, score);
+                }
+
+                function scoreBase32Candidate(candidate, decoded) {
+                    if (!candidate || !decoded || candidate.length < 16 || !/^[A-Z2-7]+=*$/.test(candidate)) return 0;
+                    let score = candidate.length % 8 === 0 ? 0.48 : 0.34;
+                    const ratio = printableRatio(decoded);
+                    if (ratio > 0.92) score += 0.34;
+                    else if (ratio > 0.78) score += 0.22;
+                    else if (ratio > 0.68) score += 0.10;
+                    return Math.min(1, score);
+                }
+
+                function addEncodingNotice(results, fileName, offset, encoding, candidate, confidence, note) {
+                    if (results.length >= WORKER_MAX_RESULTS) return;
+                    results.push({
+                        type: confidence >= 0.78 ? ('Decoded Data • ' + encoding) : ('Possible Encoding • ' + encoding + ' (low confidence)'),
+                        match: String(candidate).slice(0, 900), line: 1, offset, context: note,
+                        file: fileName + ' [' + encoding + ']', encoding: encoding + ' • confidence ' + Math.round(confidence * 100) + '%',
+                        category: 'Encoding / Obfuscation', severity: 'low',
+                        note: confidence >= 0.78 ? 'Decoded locally in the browser. No decoded content is sent to a server.' : 'Encoding-like data detected, but confidence is too low for automatic decoding. Manual inspection recommended.'
+                    });
+                }
+
                 function scanStringCandidates(text, fileName, offset, encoding, patterns, results, errors) {
                     const seen = new Set();
-                    const pushDecoded = (decodedText, decoderName) => {
+                    let lowConfidenceNotices = 0;
+                    const pushDecoded = (decodedText, decoderName, confidence, originalCandidate) => {
                         if (!decodedText || results.length >= WORKER_MAX_RESULTS) return;
                         const key = decoderName + '|' + decodedText.slice(0, 160);
                         if (seen.has(key)) return;
                         seen.add(key);
+                        if (confidence >= 0.78) addEncodingNotice(results, fileName, offset, decoderName, decodedText.slice(0, 700), confidence, 'High-confidence local decode from: ' + String(originalCandidate || '').slice(0, 220));
                         scanText(decodedText, fileName, patterns, offset, decoderName, results, errors);
                         heuristicFindings(decodedText, fileName, offset, decoderName, 0, decodedText.length, results);
                     };
@@ -1641,24 +1694,36 @@
                         if (checked++ >= maxCandidates || results.length >= WORKER_MAX_RESULTS) break;
                         if (candidate.length <= 160000 && /[+/_=-]/.test(candidate)) {
                             const b64 = base64Decode(candidate);
-                            if (b64 && b64.length >= 8 && printableRatio(b64) > 0.68) {
-                                pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b64), 'base64-decoded');
+                            const b64Score = scoreBase64Candidate(candidate, b64);
+                            if (b64 && b64Score >= 0.78) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b64), 'base64-decoded', b64Score, candidate);
+                            else if (b64 && b64Score >= 0.48 && lowConfidenceNotices < 24) {
+                                addEncodingNotice(results, fileName, offset, 'base64 candidate', candidate, b64Score, 'Base64-like sequence detected, but confidence is too low for automatic decoding.');
+                                lowConfidenceNotices++;
                             }
                         }
-                        const b32 = candidate.length <= 120000 && /^[A-Z2-7]+$/.test(candidate) ? base32Decode(candidate) : null;
-                        if (b32 && printableRatio(b32) > 0.68) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b32), 'base32-decoded');
+                        const b32 = candidate.length <= 120000 && /^[A-Z2-7]+=*$/.test(candidate) ? base32Decode(candidate) : null;
+                        const b32Score = scoreBase32Candidate(candidate, b32);
+                        if (b32 && b32Score >= 0.78) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(b32), 'base32-decoded', b32Score, candidate);
+                        else if (b32 && b32Score >= 0.45 && lowConfidenceNotices < 24) {
+                            addEncodingNotice(results, fileName, offset, 'base32 candidate', candidate, b32Score, 'Base32-like sequence detected, but confidence is too low for automatic decoding.');
+                            lowConfidenceNotices++;
+                        }
                     }
-
-                    const hexCandidates = text.match(/\\b[0-9A-Fa-f]{16,240000}\\b/g) || [];
+                    const hexCandidates = text.match(/\b[0-9A-Fa-f]{16,240000}\b/g) || [];
                     for (const hc of hexCandidates.slice(0, 1000)) {
                         if (results.length >= WORKER_MAX_RESULTS) break;
                         const decoded = decodeHex(hc.slice(0, 240000));
-                        if (decoded && printableRatio(decoded) > 0.60) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(decoded), 'hex-decoded');
+                        if (decoded && printableRatio(decoded) > 0.60) {
+                            const ratio = printableRatio(decoded);
+                            const confidence = ratio > 0.90 ? 0.96 : ratio > 0.75 ? 0.88 : 0.72;
+                            if (confidence >= 0.78) pushDecoded(new TextDecoder('utf-8', { fatal: false }).decode(decoded), 'hex-decoded', confidence, hc);
+                            else if (lowConfidenceNotices < 24) { addEncodingNotice(results, fileName, offset, 'hex candidate', hc, confidence, 'Hex-like data detected but text confidence is low.'); lowConfidenceNotices++; }
+                        }
                     }
                     const escaped = decodeEscaped(text);
-                    if (escaped) pushDecoded(escaped, 'escaped-decoded');
+                    if (escaped) pushDecoded(escaped, 'escaped-decoded', 0.98, '\\x/\\u escaped text');
                     const percent = decodePercent(text);
-                    if (percent) pushDecoded(percent, 'percent-decoded');
+                    if (percent) pushDecoded(percent, 'percent-decoded', 0.98, 'URL percent-encoded text');
                 }
 
                 function processBytes(bytes, fileName, patterns, minStringLen, recovery = false) {
@@ -2391,6 +2456,53 @@
             }
         }
 
+        function looksLikeApkName(name) { return /\.(?:apk|xapk|apks)$/i.test(String(name || '')); }
+        function hasZipMagic(bytes) { return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07) && (bytes[3] === 0x04 || bytes[3] === 0x06 || bytes[3] === 0x08); }
+        function isApkEntrySet(names) {
+            const lower = names.map(n => String(n || '').replace(/^\/+/, '').toLowerCase());
+            return lower.includes('androidmanifest.xml') && lower.some(n => /^classes\d*\.dex$/.test(n));
+        }
+
+        async function scanApkPackage(file, generation) {
+            if (!window.JSZip) throw new Error('JSZip unavailable');
+            const label = file.name || 'APK';
+            logStatus(`APK mode: opening ${label}.`, 'info', true);
+            const zip = await window.JSZip.loadAsync(file);
+            const fileEntries = Object.values(zip.files).filter(e => !e.dir);
+            const names = fileEntries.map(e => e.name);
+            if (!isApkEntrySet(names)) {
+                logStatus(`APK probe: ${label} does not have a complete Android package signature (AndroidManifest.xml + classes*.dex).`, 'warn', true);
+                return { apk: false, entries: [] };
+            }
+            const dexCount = names.filter(n => /^classes\d*\.dex$/i.test(String(n).split('/').pop())).length;
+            const assetCount = names.filter(n => /(^|\/)assets\//i.test(n)).length;
+            const nativeCount = names.filter(n => /(^|\/)lib\/[^/]+\/[^/]+\.so$/i.test(n)).length;
+            logStatus(`APK detected: ${label} • ${fileEntries.length} files • ${dexCount} DEX • ${assetCount} assets • ${nativeCount} native libraries.`, 'success', true);
+            logStatus('APK data remains local to this browser session. Decoding and secret analysis happen client-side.', 'info', true);
+            const outputs=[]; let totalBytes=0; const limit=24000;
+            for(let i=0;i<fileEntries.length && i<limit;i++){
+                if(generation!==scanGeneration) return {apk:true,entries:outputs};
+                const e=fileEntries[i], pathname=String(e.name||'').replace(/\\/g,'/');
+                try{
+                    const blob=await e.async('blob');
+                    if(blob.size>50*1024*1024){logStatus(`APK skip: ${pathname} exceeds 50 MB.`,'warn',true);continue;}
+                    totalBytes+=blob.size;
+                    if(totalBytes>MAX_EXPANDED_BYTES){logStatus('APK extraction stopped at the expanded-data safety limit.','warn',true);break;}
+                    outputs.push({name:`${label} :: ${pathname}`,data:new Uint8Array(await blob.arrayBuffer())});
+                    if(verbose && (i<250 || /(?:AndroidManifest.xml|classes\d*\.dex|assets\/|res\/raw|\.(?:json|xml|properties|js|so|txt))$/i.test(pathname))) logStatus(`verbose: APK entry ${pathname} (${blob.size.toLocaleString()} bytes).`, 'verbose');
+                }catch(error){logStatus(`APK entry read failed ${pathname}: ${error.message}`,'warn',true);}
+                if(i%25===0 || i===fileEntries.length-1) setProgress(Math.min(70,8+((i+1)/Math.max(1,fileEntries.length))*55),`APK package • ${i+1}/${fileEntries.length} entries`);
+            }
+            const manifest=outputs.find(e=>/:: AndroidManifest\.xml$/i.test(e.name));
+            if(manifest){
+                const text=decodeUtf8(manifest.data); const pkg=text.match(/\bpackage\s*=\s*["']([^"']+)["']/i)?.[1];
+                if(pkg) logStatus(`APK manifest package: ${pkg}`,'success',true);
+                else logStatus('APK manifest is binary Android XML (AXML) or not plain XML; byte/string analysis continues.','info',true);
+            }
+            logStatus(`APK extraction complete: ${outputs.length} entries / ${totalBytes.toLocaleString()} bytes queued.`, 'success', true);
+            return {apk:true,entries:outputs};
+        }
+
         async function scanFiles(files, generation) {
             scanInProgress = true;
             scanGeneration = generation;
@@ -2507,6 +2619,44 @@
                 return;
             }
 
+            if (activeMode === 'apk') {
+                let apkTargets=[];
+                for(const target of baseTargets){
+                    if(generation!==scanGeneration) return;
+                    try{
+                        const result=await scanApkPackage(target.file,generation);
+                        if(result.apk) apkTargets.push(...result.entries);
+                        else {
+                            const raw=new Uint8Array(await target.file.arrayBuffer());
+                            if(hasZipMagic(raw) || looksLikeApkName(target.displayName)) {
+                                logStatus(`APK mode: generic ZIP fallback for ${target.displayName}.`,'warn',true);
+                                apkTargets.push({name:target.displayName,data:raw});
+                            }
+                        }
+                    }catch(error){logStatus(`APK package error ${target.displayName}: ${error.message}`,'error',true);}
+                }
+                if(!apkTargets.length){scanInProgress=false;updateFileSummary();setProgress(0,'No APK entries detected');setEngineStatus('IDLE');return;}
+                const cores=navigator.hardwareConcurrency||4, memoryGB=navigator.deviceMemory||8;
+                const recommended=memoryGB<=2?1:memoryGB<=4?Math.min(2,cores):Math.min(4,cores-1);
+                const pool=createWorkerPool(Math.max(1,Math.min(recommended,apkTargets.length))); let nextApk=0;
+                const dispatchApk=async entry=>{
+                    while(generation===scanGeneration){
+                        const index=nextApk++; if(index>=apkTargets.length) return; const target=apkTargets[index];
+                        logStatus(`APK analyzing ${index+1}/${apkTargets.length}: ${target.name}`,'info',true);
+                        const workerTarget={file:new File([target.data],target.name,{type:'application/octet-stream'}),displayName:target.name};
+                        try{
+                            let result; try{result=await runWorkerTask(entry,workerTarget,`apk-${index}`,false);}catch(workerError){logStatus(`APK recovery: ${target.name} • ${workerError.message}`,'warn',true);result=await runWorkerTask(entry,workerTarget,`apk-recovery-${index}`,true);}
+                            (result.results||[]).forEach(addResult); (result.errors||[]).forEach(e=>logStatus(`APK regex error ${target.name}: ${e}`,'error',true));
+                            for(const t of (result.telemetry||[])) logStatus(`verbose:${target.name}: ${t}`,'verbose');
+                        }catch(error){logStatus(`ERROR analyzing APK entry ${target.name}: ${error.message}`,'error',true);}
+                        setProgress(Math.max(70,Math.min(99,70+((index+1)/apkTargets.length)*29)),`APK deep scan • ${index+1}/${apkTargets.length} entries`);
+                    }
+                };
+                await Promise.all(pool.map(dispatchApk));
+                pool.forEach(({worker,url})=>{worker.terminate();URL.revokeObjectURL(url);});
+                if(generation!==scanGeneration)return; scanInProgress=false;updateFileSummary();setProgress(100,`Complete • APK package analyzed • ${totalFindings} finding${totalFindings===1?'':'s'}`);setEngineStatus(totalFindings?'FINDINGS':'CLEAN',totalFindings?'danger':'success');logStatus(`APK mode complete. ${totalFindings} exposure${totalFindings===1?'':'s'} detected.`,totalFindings?'warn':'success',true);return;
+            }
+
             const cores = navigator.hardwareConcurrency || 4;
             const memoryGB = navigator.deviceMemory || 8;
             const recommended = memoryGB <= 2 ? 1 : memoryGB <= 4 ? Math.min(2, cores) : Math.min(4, cores - 1);
@@ -2533,7 +2683,7 @@
                         if (workerResult.highEntropyWindows > 0 && activeMode === 'firmware') logStatus(`${target.displayName}: high entropy detected; decompression probes enabled.`, 'warn', true);
                         if (verbose) for (const s of (workerResult.signatures || [])) logStatus(`verbose:${target.displayName}: ${s.name} @ 0x${s.offset.toString(16)}`, 'verbose');
 
-                        const needsDeepExtraction = activeMode === 'firmware' ||
+                        const needsDeepExtraction = activeMode === 'firmware' || activeMode === 'apk' ||
                             (workerResult.signatures || []).some(s => ['ZIP archive','7-Zip archive','GZIP stream','XZ stream','BZIP2 stream'].includes(s.name)) ||
                             /\.(?:zip|7z|rar|tar|tgz|tbz2|txz|cpio)$/i.test(target.displayName);
                         if (needsDeepExtraction) {
@@ -2773,11 +2923,14 @@
                     ? 'Recursive source/config/archive analysis with multiple encodings and archive formats'
                     : activeMode === 'firmware'
                         ? 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings'
-                        : 'Git object-database reconstruction: commits, trees, blobs, branches, tags, refs, and leaked secrets';
-                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : '.git Object Database';
+                        : activeMode === 'apk'
+                            ? 'Android APK package analysis: manifest, DEX/resources, embedded files, secrets, URLs, and local decoding'
+                            : 'Git object-database reconstruction: commits, trees, blobs, branches, tags, refs, and leaked secrets';
+                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : activeMode === 'apk' ? 'Android APK' : '.git Object Database';
+                fileInput.accept = activeMode === 'apk' ? '.apk,.xapk,.apks,.zip,application/vnd.android.package-archive' : '';
                 patternsInput.value = JSON.stringify(currentPatterns, null, 2);
                 updateGitHistoryControls();
-                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : '.git Object Database'} mode.`, 'info', true);
+                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : activeMode === 'apk' ? 'Android APK' : '.git Object Database'} mode.`, 'info', true);
             });
         });
 
@@ -2905,7 +3058,7 @@
         });
         document.getElementById('reset-settings').addEventListener('click', () => {
             localStorage.removeItem(`customPatterns_${activeMode}`);
-            currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : activeMode === 'firmware' ? FIRMWARE_PATTERNS : GIT_PATTERNS;
+            currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : activeMode === 'firmware' ? FIRMWARE_PATTERNS : activeMode === 'apk' ? APK_PATTERNS : GIT_PATTERNS;
             patternsInput.value = JSON.stringify(currentPatterns, null, 2);
             logStatus(`Reset ${activeMode} to factory default patterns.`, 'warn', true);
         });
@@ -2936,6 +3089,7 @@
         }
 
         // Initial state
+        fileInput.accept = '';
         logStatus('SecretBurrow ready. Analysis stays client-side.', 'success', true);
         logStatus(`Engine loaded: ${currentPatterns.length} ${activeMode} patterns + universal encoding/crypto/hash heuristics.`, 'info', true);
         logStatus(`Verbose telemetry: ${verbose ? 'ON' : 'OFF'}.`, 'info', true);
