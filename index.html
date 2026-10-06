@@ -1565,8 +1565,8 @@
                     if (s.length > 250000) s = s.slice(0, 250000);
                     let changed = false;
                     const out = s
-                        .replace(/\\x([0-9a-f]{2})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); })
-                        .replace(/\\u([0-9a-f]{4})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); });
+                        .replace(/\\\\x([0-9a-f]{2})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); })
+                        .replace(/\\\\u([0-9a-f]{4})/gi, (_, h) => { changed = true; return String.fromCharCode(parseInt(h, 16)); });
                     return changed ? out : null;
                 }
 
@@ -1721,7 +1721,7 @@
                         }
                     }
                     const escaped = decodeEscaped(text);
-                    if (escaped) pushDecoded(escaped, 'escaped-decoded', 0.98, '\\x/\\u escaped text');
+                    if (escaped) pushDecoded(escaped, 'escaped-decoded', 0.98, '\\\\x/\\\\u escaped text');
                     const percent = decodePercent(text);
                     if (percent) pushDecoded(percent, 'percent-decoded', 0.98, 'URL percent-encoded text');
                 }
