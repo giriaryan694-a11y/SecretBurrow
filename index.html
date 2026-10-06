@@ -618,6 +618,7 @@
                 <div class="git-depth-row">
                     <span>Commit depth</span>
                     <select id="git-history-depth" aria-label="Git commit history depth">
+                        <option value="0">Unlimited (all reachable commits)</option>
                         <option value="10">10 commits</option>
                         <option value="25" selected>25 commits</option>
                         <option value="50">50 commits</option>
@@ -2242,7 +2243,8 @@
                 logStatus('Git history scan skipped: no local .git directory was found in the selected target.', 'warn', true);
                 return;
             }
-            const maxCommits = Math.max(1, Number(gitHistoryDepth.value) || 25);
+            const requestedDepth = Number(gitHistoryDepth.value);
+            const maxCommits = Number.isFinite(requestedDepth) && requestedDepth > 0 ? requestedDepth : 0;
             let repoIndex = 0;
             const globalSeenBlobs = new Set();
             const historyWorkerEntry = createWorker();
@@ -2262,12 +2264,16 @@
                     logStatus(`Git history: opening repository ${repo.root || '/'}.`, 'info', true);
                     let commits;
                     try {
-                        commits = await git.log({ fs: virtualFs, dir: '/', gitdir: gitDir, ref: 'HEAD', depth: maxCommits, includeChanges: true });
+                        const logOptions = { fs: virtualFs, dir: '/', gitdir: gitDir, ref: 'HEAD', includeChanges: true };
+                        // depth=0 means unlimited: omit the depth option so isomorphic-git
+                        // walks all commits reachable from HEAD in the local object database.
+                        if (maxCommits > 0) logOptions.depth = maxCommits;
+                        commits = await git.log(logOptions);
                     } catch (error) {
                         logStatus(`Git history ERROR ${repo.root}: ${error.message}`, 'error', true);
                         continue;
                     }
-                    logStatus(`Git history: ${commits.length} commit${commits.length === 1 ? '' : 's'} loaded from HEAD.`, 'success', true);
+                    logStatus(`Git history: ${commits.length} commit${commits.length === 1 ? '' : 's'} loaded from HEAD${maxCommits === 0 ? ' (unlimited depth)' : ` (depth ${maxCommits})`}.`, 'success', true);
                     let commitNo = 0;
                     for (const commit of commits) {
                         if (generation !== scanGeneration) return;
@@ -2341,7 +2347,7 @@
                             logStatus(`Git tree ERROR ${shortOid}: ${error.message}`, 'error', true);
                         }
                         if (gitHistoryVerboseToggle.checked || verbose) logStatus(`git: commit ${shortOid} done • ${historicalBlobs} unique blobs scanned, ${reusedBlobs} reused.`, 'verbose');
-                        setProgress(Math.min(99, 88 + ((repoIndex - 1) + commitNo / Math.max(1, commits.length)) / Math.max(1, repos.length) * 10), `Git history • ${repoIndex}/${repos.length} repos • ${commitNo}/${commits.length} commits`);
+                        setProgress(Math.min(99, 88 + ((repoIndex - 1) + commitNo / Math.max(1, commits.length)) / Math.max(1, repos.length) * 10), `Git history • ${repoIndex}/${repos.length} repos • ${commitNo}/${commits.length} commits${maxCommits === 0 ? ' • unlimited' : ''}`);
                     }
                     logStatus(`Git history complete for ${repo.root}: ${commits.length} commits traversed, ${globalSeenBlobs.size} unique blobs observed so far.`, 'success', true);
                 }
@@ -2603,7 +2609,9 @@
 
         gitHistoryScanToggle.checked = localStorage.getItem('secretburrow_git_history') === '1';
         gitHistoryVerboseToggle.checked = localStorage.getItem('secretburrow_git_history_verbose') === '1';
-        gitHistoryDepth.value = localStorage.getItem('secretburrow_git_history_depth') || '25';
+        const savedGitDepth = localStorage.getItem('secretburrow_git_history_depth');
+        gitHistoryDepth.value = savedGitDepth !== null ? savedGitDepth : '25';
+        if (!gitHistoryDepth.querySelector(`option[value="${gitHistoryDepth.value}"]`)) gitHistoryDepth.value = '25';
         gitHistoryScanToggle.addEventListener('change', () => {
             localStorage.setItem('secretburrow_git_history', gitHistoryScanToggle.checked ? '1' : '0');
             logStatus(`Git previous-version scanning ${gitHistoryScanToggle.checked ? 'enabled' : 'disabled'}.`, 'info', true);
@@ -2617,6 +2625,7 @@
         });
         gitHistoryDepth.addEventListener('change', () => {
             localStorage.setItem('secretburrow_git_history_depth', gitHistoryDepth.value);
+            logStatus(`Git commit depth set to ${gitHistoryDepth.value === '0' ? 'UNLIMITED (all reachable commits)' : gitHistoryDepth.value + ' commits'}.`, 'info', true);
         });
 
         document.querySelectorAll('.tab-btn').forEach(btn => {
