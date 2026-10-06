@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- ZIP extraction stays client-side. No uploaded archive is sent to a server. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/@isomorphic-git/lightning-fs@4.9.0" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/isomorphic-git@1.42.5" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/lzma-wasm@1.0.7/dist/iife/index.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://unpkg.com/filing@0.1.2/dist/umd/filing.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -428,6 +430,86 @@
             .export-menu { left: 0; right: 0; }
         }
 
+        .git-history-controls {
+            display: grid;
+            gap: 0.7rem;
+            padding: 0.85rem 0.9rem;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            background: var(--bg-base);
+        }
+        .git-history-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+            font: 700 0.76rem var(--font-mono);
+        }
+        .git-option {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.25rem 0.55rem;
+            align-items: start;
+            cursor: pointer;
+            color: var(--text-primary);
+            font: 600 0.73rem var(--font-mono);
+        }
+        .git-option input { width: 15px; height: 15px; accent-color: var(--accent); margin-top: 1px; }
+        .git-option small { grid-column: 2; color: var(--text-secondary); font: 500 0.67rem/1.45 var(--font-ui); }
+        .git-depth-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: var(--text-secondary);
+            font: 600 0.68rem var(--font-mono);
+        }
+        .git-depth-row select { width: auto; min-width: 110px; padding: 0.45rem 0.55rem; }
+
+        .category-bar {
+            display: flex;
+            gap: 0.45rem;
+            overflow-x: auto;
+            padding: 0.1rem 0 0.25rem;
+            scrollbar-width: thin;
+        }
+        .category-bar::-webkit-scrollbar { height: 5px; }
+        .category-bar::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 999px; }
+        .category-chip {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.45rem 0.68rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-base);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font: 700 0.68rem var(--font-mono);
+            transition: var(--transition);
+        }
+        .category-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+        .category-chip.active { border-color: rgba(16,185,129,0.45); background: rgba(16,185,129,0.08); color: var(--accent); }
+        .category-chip .count {
+            min-width: 1.35rem;
+            text-align: center;
+            padding: 0.08rem 0.3rem;
+            border-radius: 999px;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .history-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 0.35rem;
+            padding: 0.12rem 0.38rem;
+            border-radius: 4px;
+            border: 1px solid rgba(96,165,250,0.25);
+            background: rgba(96,165,250,0.08);
+            color: var(--info);
+            font: 700 0.62rem var(--font-mono);
+        }
+
         .results-container {
             min-height: 400px;
             max-height: 70vh;
@@ -521,6 +603,30 @@
                 <button class="tab-btn" data-mode="firmware">Firmware Mode</button>
             </div>
 
+            <div class="git-history-controls" id="git-history-controls">
+                <div class="git-history-title">🕰️ Git History Analysis</div>
+                <label class="git-option">
+                    <input type="checkbox" id="git-history-scan">
+                    <span>Scan previous Git versions</span>
+                    <small>Read the local .git object database, walk commit trees, reconstruct historical snapshots logically, and scan unique historical blobs for leaks.</small>
+                </label>
+                <label class="git-option">
+                    <input type="checkbox" id="git-history-verbose">
+                    <span>Verbose Git commit history scan</span>
+                    <small>Show commits, tree reconstruction, historical directories/files, reused blobs, skipped large blobs, and scan progress in the terminal.</small>
+                </label>
+                <div class="git-depth-row">
+                    <span>Commit depth</span>
+                    <select id="git-history-depth" aria-label="Git commit history depth">
+                        <option value="10">10 commits</option>
+                        <option value="25" selected>25 commits</option>
+                        <option value="50">50 commits</option>
+                        <option value="100">100 commits</option>
+                        <option value="250">250 commits</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload files, folders, or zip archives">
                 <svg class="dropzone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
@@ -599,6 +705,8 @@
                 </div>
             </div>
             <div id="findings-meta" class="findings-meta">0 findings shown</div>
+
+            <div id="category-bar" class="category-bar" aria-label="Finding categories"></div>
 
             <div class="results-container" id="results-container">
                 <div class="empty-state">
@@ -992,6 +1100,7 @@
         let findings = [];
         let findingKeys = new Set();
         let findingsSearch = '';
+        let activeFindingCategory = 'All';
         let scanInProgress = false;
         let scanGeneration = 0;
         let verbose = localStorage.getItem('secretburrow_verbose') === '1';
@@ -1022,6 +1131,11 @@
         const findingsMeta = document.getElementById('findings-meta');
         const exportBtn = document.getElementById('export-btn');
         const exportMenu = document.getElementById('export-menu');
+        const categoryBar = document.getElementById('category-bar');
+        const gitHistoryControls = document.getElementById('git-history-controls');
+        const gitHistoryScanToggle = document.getElementById('git-history-scan');
+        const gitHistoryVerboseToggle = document.getElementById('git-history-verbose');
+        const gitHistoryDepth = document.getElementById('git-history-depth');
 
         function loadPatterns(mode) {
             try {
@@ -1074,6 +1188,7 @@
             totalFindings = 0;
             findings = [];
             findingKeys = new Set();
+            activeFindingCategory = 'All';
             resultCount.textContent = '0 FINDINGS';
             resultCount.classList.remove('danger');
             renderFindings();
@@ -1090,7 +1205,13 @@
                 context: String(result.context ?? ''),
                 file: String(result.file ?? ''),
                 encoding: String(result.encoding || ''),
-                note: String(result.note || '')
+                note: String(result.note || ''),
+                historical: Boolean(result.historical),
+                commit: String(result.commit || ''),
+                commitMessage: String(result.commitMessage || ''),
+                author: String(result.author || ''),
+                commitDate: String(result.commitDate || ''),
+                source: String(result.source || (result.historical ? 'git-history' : 'working-tree'))
             };
         }
 
@@ -1122,24 +1243,70 @@
             renderFindings();
         }
 
+        function getFindingCategories() {
+            const counts = new Map();
+            for (const r of findings) counts.set(r.type, (counts.get(r.type) || 0) + 1);
+            return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        }
+
+        function renderCategoryBar() {
+            const categories = getFindingCategories();
+            categoryBar.innerHTML = '';
+            const all = document.createElement('button');
+            all.type = 'button';
+            all.className = `category-chip ${activeFindingCategory === 'All' ? 'active' : ''}`;
+            all.textContent = 'All';
+            const allCount = document.createElement('span');
+            allCount.className = 'count';
+            allCount.textContent = findings.length;
+            all.appendChild(allCount);
+            all.addEventListener('click', () => {
+                activeFindingCategory = 'All';
+                renderFindings();
+            });
+            categoryBar.appendChild(all);
+
+            for (const [category, count] of categories) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = `category-chip ${activeFindingCategory === category ? 'active' : ''}`;
+                chip.title = `${count} finding${count === 1 ? '' : 's'} in ${category}`;
+                chip.textContent = category;
+                const badge = document.createElement('span');
+                badge.className = 'count';
+                badge.textContent = count;
+                chip.appendChild(badge);
+                chip.addEventListener('click', () => {
+                    activeFindingCategory = category;
+                    renderFindings();
+                });
+                categoryBar.appendChild(chip);
+            }
+        }
+
         function getVisibleFindings() {
             const q = findingsSearch.trim().toLowerCase();
-            if (!q) return findings;
-            return findings.filter(r => [r.type, r.category, r.severity, r.match, r.context, r.file, r.encoding, r.note, r.line, r.offset]
-                .join(' ').toLowerCase().includes(q));
+            return findings.filter(r => {
+                if (activeFindingCategory !== 'All' && r.type !== activeFindingCategory) return false;
+                if (!q) return true;
+                return [r.type, r.category, r.severity, r.match, r.context, r.file, r.encoding, r.note, r.line, r.offset, r.commit, r.commitMessage, r.author, r.commitDate, r.source]
+                    .join(' ').toLowerCase().includes(q);
+            });
         }
 
         function renderFindings() {
+            renderCategoryBar();
             const visible = getVisibleFindings();
-            findingsMeta.textContent = `${visible.length} of ${findings.length} finding${findings.length === 1 ? '' : 's'} shown`;
+            const categoryLabel = activeFindingCategory === 'All' ? 'all categories' : activeFindingCategory;
+            findingsMeta.textContent = `${visible.length} of ${findings.length} finding${findings.length === 1 ? '' : 's'} shown • ${categoryLabel}`;
             if (!visible.length) {
                 resultsContainer.innerHTML = `
                     <div class="empty-state">
                         <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--border-strong); margin-bottom: 1rem;" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                         </svg>
-                        <p>${findings.length ? 'No findings match your search.' : 'No findings detected.'}</p>
-                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">${findings.length ? 'Try a file name, type, encoding, hash or keyword.' : 'Drop a target above to begin client-side analysis.'}</p>
+                        <p>${findings.length ? 'No findings match the current filters.' : 'No findings detected.'}</p>
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">${findings.length ? 'Choose All or another category, or change your search.' : 'Drop a target above to begin client-side analysis.'}</p>
                     </div>`;
                 return;
             }
@@ -1152,10 +1319,17 @@
                 const type = document.createElement('span');
                 type.className = 'result-type';
                 type.textContent = result.type;
+                if (result.historical) {
+                    const history = document.createElement('span');
+                    history.className = 'history-badge';
+                    history.textContent = 'GIT HISTORY';
+                    type.appendChild(history);
+                }
                 const meta = document.createElement('span');
                 meta.className = 'result-meta';
                 const location = result.line ? `Line ${result.line}` : `Offset 0x${result.offset.toString(16)}`;
-                meta.textContent = `${location} • ${result.file}`;
+                const commitPart = result.commit ? ` • ${result.commit.slice(0, 10)}` : '';
+                meta.textContent = `${location} • ${result.file}${commitPart}`;
                 header.append(type, meta);
 
                 const match = document.createElement('div');
@@ -1164,6 +1338,13 @@
                 const context = document.createElement('div');
                 context.className = 'result-context';
                 context.textContent = result.context || result.note || '';
+                if (result.historical && result.commitMessage) {
+                    const historyContext = document.createElement('div');
+                    historyContext.style.marginTop = '0.55rem';
+                    historyContext.style.opacity = '0.8';
+                    historyContext.textContent = `Commit ${result.commit.slice(0, 10)} • ${result.commitDate || 'unknown date'} • ${result.author || 'unknown author'} • ${result.commitMessage.split('\\n')[0].slice(0, 140)}`;
+                    context.appendChild(historyContext);
+                }
                 card.append(header, match, context);
                 frag.appendChild(card);
             });
@@ -1946,6 +2127,230 @@
             throw lastError || new Error('worker task failed');
         }
 
+        function normalizeRepoPath(path) {
+            return '/' + String(path || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
+        }
+
+        function detectGitRepos(targets) {
+            const repos = new Map();
+            for (const target of targets) {
+                const p = normalizeRepoPath(target.displayName);
+                const marker = p.toLowerCase().indexOf('/.git/');
+                if (marker >= 0) {
+                    const root = p.slice(0, marker) || '/';
+                    if (!repos.has(root)) repos.set(root, []);
+                    repos.get(root).push(target);
+                    continue;
+                }
+                if (/\/\.git$/i.test(p)) {
+                    const root = p.slice(0, p.length - 5) || '/';
+                    if (!repos.has(root)) repos.set(root, []);
+                    repos.get(root).push(target);
+                }
+            }
+            return [...repos.entries()].map(([root, files]) => ({ root, files }));
+        }
+
+        function buildGitVirtualFS(gitTargets, repoRoot) {
+            const files = new Map();
+            const dirs = new Set(['/']);
+            const sourceByPath = new Map();
+            for (const target of gitTargets) {
+                const full = normalizeRepoPath(target.displayName);
+                let rel = full;
+                const rootPrefix = repoRoot === '/' ? '' : repoRoot;
+                if (rootPrefix && rel.startsWith(rootPrefix + '/')) rel = rel.slice(rootPrefix.length);
+                if (!rel.startsWith('/')) rel = '/' + rel;
+                if (!/\/.git(?:\/|$)/i.test(rel)) continue;
+                const clean = rel.replace(/\/+/g, '/');
+                sourceByPath.set(clean, target.file);
+                const parts = clean.split('/').filter(Boolean);
+                let current = '';
+                for (let i = 0; i < parts.length - 1; i++) {
+                    current += '/' + parts[i];
+                    dirs.add(current);
+                }
+            }
+            const cache = new Map();
+            function parentOf(path) {
+                const i = path.lastIndexOf('/');
+                return i <= 0 ? '/' : path.slice(0, i);
+            }
+            const toBytes = async (file) => {
+                const cached = cache.get(file);
+                if (cached) return cached;
+                const buf = new Uint8Array(await file.arrayBuffer());
+                cache.set(file, buf);
+                return buf;
+            };
+            const makeError = (code, path) => Object.assign(new Error(`${code}: ${path}`), { code });
+            return {
+                promises: {
+                    async readFile(path, options) {
+                        const key = normalizeRepoPath(path);
+                        const file = sourceByPath.get(key);
+                        if (!file) throw makeError('ENOENT', key);
+                        const bytes = await toBytes(file);
+                        if (typeof options === 'string' || options?.encoding) return new TextDecoder(options?.encoding || options).decode(bytes);
+                        return bytes;
+                    },
+                    async readdir(path) {
+                        const key = normalizeRepoPath(path).replace(/\/$/, '') || '/';
+                        const seen = new Set();
+                        const prefix = key === '/' ? '/' : key + '/';
+                        for (const child of sourceByPath.keys()) {
+                            if (!child.startsWith(prefix)) continue;
+                            const rest = child.slice(prefix.length);
+                            if (rest && !rest.includes('/')) seen.add(rest);
+                            else if (rest) seen.add(rest.split('/')[0]);
+                        }
+                        for (const dir of dirs) {
+                            if (!dir.startsWith(prefix)) continue;
+                            const rest = dir.slice(prefix.length);
+                            if (rest && !rest.includes('/')) seen.add(rest);
+                            else if (rest) seen.add(rest.split('/')[0]);
+                        }
+                        if (!seen.size && key !== '/') throw makeError('ENOENT', key);
+                        return [...seen];
+                    },
+                    async stat(path) {
+                        const key = normalizeRepoPath(path).replace(/\/$/, '') || '/';
+                        if (sourceByPath.has(key)) {
+                            const file = sourceByPath.get(key);
+                            return { type: 'file', mode: 0o100644, size: file.size, isFile: () => true, isDirectory: () => false };
+                        }
+                        if (dirs.has(key)) return { type: 'dir', mode: 0o40755, size: 0, isFile: () => false, isDirectory: () => true };
+                        throw makeError('ENOENT', key);
+                    },
+                    async lstat(path) { return this.stat(path); },
+                    async readlink(path) { throw makeError('EINVAL', path); },
+                    async writeFile() { throw makeError('EROFS', 'read-only git filesystem'); },
+                    async mkdir() { throw makeError('EROFS', 'read-only git filesystem'); },
+                    async unlink() { throw makeError('EROFS', 'read-only git filesystem'); },
+                    async rmdir() { throw makeError('EROFS', 'read-only git filesystem'); }
+                }
+            };
+        }
+
+        async function scanGitHistory(targets, generation) {
+            if (!window.git) {
+                logStatus('Git history engine unavailable: isomorphic-git failed to load.', 'error', true);
+                return;
+            }
+            const repos = detectGitRepos(targets);
+            if (!repos.length) {
+                logStatus('Git history scan skipped: no local .git directory was found in the selected target.', 'warn', true);
+                return;
+            }
+            const maxCommits = Math.max(1, Number(gitHistoryDepth.value) || 25);
+            let repoIndex = 0;
+            const globalSeenBlobs = new Set();
+            const historyWorkerEntry = createWorker();
+            try {
+                for (const repo of repos) {
+                    if (generation !== scanGeneration) return;
+                    repoIndex++;
+                    const virtualFs = buildGitVirtualFS(repo.files, repo.root);
+                    const gitDir = '/.git';
+                    try {
+                        await virtualFs.promises.stat(gitDir);
+                    } catch {
+                        logStatus(`Git repo ${repo.root}: .git directory not readable from browser selection.`, 'warn', true);
+                        continue;
+                    }
+
+                    logStatus(`Git history: opening repository ${repo.root || '/'}.`, 'info', true);
+                    let commits;
+                    try {
+                        commits = await git.log({ fs: virtualFs, dir: '/', gitdir: gitDir, ref: 'HEAD', depth: maxCommits, includeChanges: true });
+                    } catch (error) {
+                        logStatus(`Git history ERROR ${repo.root}: ${error.message}`, 'error', true);
+                        continue;
+                    }
+                    logStatus(`Git history: ${commits.length} commit${commits.length === 1 ? '' : 's'} loaded from HEAD.`, 'success', true);
+                    let commitNo = 0;
+                    for (const commit of commits) {
+                        if (generation !== scanGeneration) return;
+                        commitNo++;
+                        const shortOid = commit.oid.slice(0, 10);
+                        const message = String(commit.message || '').split('\n')[0].trim();
+                        logStatus(`Git history ${repoIndex}/${repos.length}: reconstructing commit ${commitNo}/${commits.length} ${shortOid}${message ? ` • ${message.slice(0, 90)}` : ''}.`, 'info', true);
+                        if (gitHistoryVerboseToggle.checked || verbose) logStatus(`git: walking tree ${shortOid}.`, 'verbose');
+
+                        let historicalBlobs = 0;
+                        let reusedBlobs = 0;
+                        try {
+                            await git.walk({
+                                fs: virtualFs,
+                                dir: '/',
+                                gitdir: gitDir,
+                                trees: [git.TREE({ ref: commit.oid })],
+                                map: async (filepath, entries) => {
+                                    const entry = entries && entries[0];
+                                    if (!entry) return undefined;
+                                    const type = await entry.type();
+                                    if (type !== 'blob') {
+                                        if (gitHistoryVerboseToggle.checked && filepath && filepath !== '.') logStatus(`git: seeing directory ${filepath}`, 'verbose');
+                                        return undefined;
+                                    }
+                                    const oid = await entry.oid();
+                                    if (globalSeenBlobs.has(oid)) {
+                                        reusedBlobs++;
+                                        if (gitHistoryVerboseToggle.checked) logStatus(`git: reused blob ${oid.slice(0, 10)} at ${filepath}`, 'verbose');
+                                        return undefined;
+                                    }
+                                    globalSeenBlobs.add(oid);
+                                    historicalBlobs++;
+                                    const content = await entry.content();
+                                    if (!content || content.byteLength === 0) return undefined;
+                                    if (content.byteLength > 18 * 1024 * 1024) {
+                                        logStatus(`git: skipped large historical blob ${filepath} (${(content.byteLength/1048576).toFixed(1)} MB).`, 'warn', true);
+                                        return undefined;
+                                    }
+                                    if (gitHistoryVerboseToggle.checked) logStatus(`git: extracting historical file ${filepath} (${content.byteLength.toLocaleString()} bytes).`, 'verbose');
+                                    const fake = new File([content], filepath, { type: 'application/octet-stream' });
+                                    const workerTarget = { file: fake, displayName: `${repo.root || '/'} :: ${filepath} @ ${shortOid}` };
+                                    let result;
+                                    try {
+                                        result = await runWorkerTask(historyWorkerEntry, workerTarget, `history-${commitNo}-${historicalBlobs}`, false);
+                                    } catch (error) {
+                                        logStatus(`git: worker failed for ${filepath}; retrying recovery scan.`, 'warn', true);
+                                        result = await runWorkerTask(historyWorkerEntry, workerTarget, `history-recovery-${commitNo}-${historicalBlobs}`, true);
+                                    }
+                                    (result.results || []).forEach(r => addResult({
+                                        ...r,
+                                        historical: true,
+                                        source: 'git-history',
+                                        commit: commit.oid,
+                                        commitMessage: commit.message,
+                                        author: commit.author ? `${commit.author.name} <${commit.author.email}>` : '',
+                                        commitDate: commit.author?.timestamp ? new Date(commit.author.timestamp * 1000).toISOString() : '',
+                                        note: `${r.note || ''}${r.note ? ' • ' : ''}Historical Git version ${shortOid}`
+                                    }));
+                                    for (const t of (result.telemetry || [])) if (gitHistoryVerboseToggle.checked) logStatus(`git:${filepath}: ${t}`, 'verbose');
+                                    if (result.errors?.length) result.errors.forEach(e => logStatus(`Git regex error ${filepath}: ${e}`, 'error', true));
+                                    return undefined;
+                                },
+                                iterate: async (walk, children) => {
+                                    const out = [];
+                                    for (const child of children) out.push(...await walk(child));
+                                    return out;
+                                }
+                            });
+                        } catch (error) {
+                            logStatus(`Git tree ERROR ${shortOid}: ${error.message}`, 'error', true);
+                        }
+                        if (gitHistoryVerboseToggle.checked || verbose) logStatus(`git: commit ${shortOid} done • ${historicalBlobs} unique blobs scanned, ${reusedBlobs} reused.`, 'verbose');
+                        setProgress(Math.min(99, 88 + ((repoIndex - 1) + commitNo / Math.max(1, commits.length)) / Math.max(1, repos.length) * 10), `Git history • ${repoIndex}/${repos.length} repos • ${commitNo}/${commits.length} commits`);
+                    }
+                    logStatus(`Git history complete for ${repo.root}: ${commits.length} commits traversed, ${globalSeenBlobs.size} unique blobs observed so far.`, 'success', true);
+                }
+            } finally {
+                try { historyWorkerEntry.worker.terminate(); } catch (_) {}
+                try { URL.revokeObjectURL(historyWorkerEntry.url); } catch (_) {}
+            }
+        }
+
         async function scanFiles(files, generation) {
             scanInProgress = true;
             scanGeneration = generation;
@@ -1964,7 +2369,7 @@
             for (const file of normalized) {
                 if (generation !== scanGeneration) return;
                 if (file.size > 50 * 1024 * 1024) { logStatus(`SKIP ${file.name}: exceeds 50 MB input limit.`, 'warn', true); continue; }
-                const path = file.webkitRelativePath || file.name;
+                const path = file._secretburrowRelativePath || file.webkitRelativePath || file.name;
                 const slash = path.lastIndexOf('/');
                 if (verbose && slash > 0) logStatus(`verbose: entering directory ${path.slice(0, slash)}`, 'verbose');
                 baseTargets.push({ file, displayName: path });
@@ -2016,9 +2421,21 @@
             await Promise.all(pool.map(entry => dispatch(entry)));
             pool.forEach(({ worker, url }) => { worker.terminate(); URL.revokeObjectURL(url); });
             if (generation !== scanGeneration) return;
+
+            if (activeMode === 'code' && gitHistoryScanToggle.checked) {
+                logStatus('Git history option enabled: beginning previous-version analysis.', 'info', true);
+                setProgress(88, 'Preparing Git commit history');
+                try {
+                    await scanGitHistory(baseTargets, generation);
+                } catch (error) {
+                    logStatus(`Git history fatal error: ${error.message}`, 'error', true);
+                }
+            }
+
+            if (generation !== scanGeneration) return;
             scanInProgress = false;
             updateFileSummary();
-            setProgress(100, `Complete • ${completed} root target${completed === 1 ? '' : 's'} processed`);
+            setProgress(100, `Complete • ${completed} root target${completed === 1 ? '' : 's'} processed${activeMode === 'code' && gitHistoryScanToggle.checked ? ' • Git history analyzed' : ''}`);
             setEngineStatus(totalFindings ? 'FINDINGS' : 'CLEAN', totalFindings ? 'danger' : 'success');
             logStatus(`Scan complete. ${totalFindings} exposure${totalFindings === 1 ? '' : 's'} detected.`, totalFindings ? 'warn' : 'success', true);
         }
@@ -2035,7 +2452,7 @@
             }
             setProgress(0, `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} queued`);
             logStatus(`Loaded ${selectedFiles.length} input file${selectedFiles.length === 1 ? '' : 's'}.`, 'success', true);
-            for (const f of selectedFiles.slice(0, verbose ? 80 : 8)) logStatus(`verbose: queued ${f.webkitRelativePath || f.name}`, 'verbose');
+            for (const f of selectedFiles.slice(0, verbose ? 80 : 8)) logStatus(`verbose: queued ${f._secretburrowRelativePath || f.webkitRelativePath || f.name}`, 'verbose');
             setEngineStatus('READY', 'success');
         }
 
@@ -2060,16 +2477,16 @@
         }
 
         function exportCsv(data) {
-            const headers = ['type','category','severity','file','encoding','line','offset','match','context','note'];
+            const headers = ['type','category','severity','file','encoding','line','offset','match','context','note','source','commit','commitMessage','author','commitDate'];
             return [headers.join(','), ...data.map(r => headers.map(h => csvEscape(r[h])).join(','))].join('\n');
         }
 
         function exportSql(data) {
-            const rows = data.map(r => `('${sqlEscape(r.type)}','${sqlEscape(r.category)}','${sqlEscape(r.severity)}','${sqlEscape(r.file)}','${sqlEscape(r.encoding)}',${Number(r.line)||0},${Number(r.offset)||0},'${sqlEscape(r.match)}','${sqlEscape(r.context)}','${sqlEscape(r.note)}')`);
+            const rows = data.map(r => `('${sqlEscape(r.type)}','${sqlEscape(r.category)}','${sqlEscape(r.severity)}','${sqlEscape(r.file)}','${sqlEscape(r.encoding)}',${Number(r.line)||0},${Number(r.offset)||0},'${sqlEscape(r.match)}','${sqlEscape(r.context)}','${sqlEscape(r.note)}','${sqlEscape(r.source)}','${sqlEscape(r.commit)}','${sqlEscape(r.commitMessage)}','${sqlEscape(r.author)}','${sqlEscape(r.commitDate)}')`);
             return [
                 '-- SecretBurrow findings export',
-                'CREATE TABLE IF NOT EXISTS secretburrow_findings (type TEXT, category TEXT, severity TEXT, file TEXT, encoding TEXT, line INTEGER, byte_offset INTEGER, match TEXT, context TEXT, note TEXT);',
-                rows.length ? `INSERT INTO secretburrow_findings (type, category, severity, file, encoding, line, byte_offset, match, context, note) VALUES\n${rows.join(',\n')};` : '-- No findings in current view.'
+                'CREATE TABLE IF NOT EXISTS secretburrow_findings (type TEXT, category TEXT, severity TEXT, file TEXT, encoding TEXT, line INTEGER, byte_offset INTEGER, match TEXT, context TEXT, note TEXT, source TEXT, commit_oid TEXT, commit_message TEXT, author TEXT, commit_date TEXT);',
+                rows.length ? `INSERT INTO secretburrow_findings (type, category, severity, file, encoding, line, byte_offset, match, context, note, source, commit_oid, commit_message, author, commit_date) VALUES\n${rows.join(',\n')};` : '-- No findings in current view.'
             ].join('\n\n');
         }
 
@@ -2080,12 +2497,12 @@
                 `Generated: ${new Date().toISOString()}`,
                 `Findings exported: ${data.length}`,
                 '',
-                '| Severity | Type | File | Encoding | Line | Offset | Match | Context |',
-                '|---|---|---|---|---:|---:|---|---|'
+                '| Severity | Type | File | Source | Commit | Encoding | Line | Offset | Match | Context |',
+                '|---|---|---|---|---|---|---:|---:|---|---|'
             ];
             for (const r of data) {
                 const esc = v => String(v ?? '').replace(/\|/g,'\\|').replace(/\n/g,' ');
-                lines.push(`| ${esc(r.severity)} | ${esc(r.type)} | ${esc(r.file)} | ${esc(r.encoding)} | ${r.line || 0} | 0x${(r.offset || 0).toString(16)} | ${esc(r.match)} | ${esc(r.context || r.note)} |`);
+                lines.push(`| ${esc(r.severity)} | ${esc(r.type)} | ${esc(r.file)} | ${esc(r.source)} | ${esc(r.commit ? r.commit.slice(0,10) : '')} | ${esc(r.encoding)} | ${r.line || 0} | 0x${(r.offset || 0).toString(16)} | ${esc(r.match)} | ${esc(r.context || r.note)} |`);
             }
             return lines.join('\n');
         }
@@ -2112,6 +2529,8 @@
                 lines.push(`Line: ${r.line || 0} | Offset: 0x${(r.offset || 0).toString(16)}`);
                 lines.push(`Match: ${r.match}`);
                 lines.push(`Context: ${r.context || r.note || ''}`);
+                lines.push(`Source: ${r.source || 'working-tree'}${r.commit ? ` | Commit: ${r.commit}` : ''}`);
+                if (r.historical) lines.push(`Commit message: ${r.commitMessage || ''}`);
                 lines.push('');
             });
             return lines.join('\n');
@@ -2154,6 +2573,8 @@
                 line(`Encoding: ${r.encoding || 'n/a'} | Line: ${r.line || 0} | Offset: 0x${(r.offset || 0).toString(16)}`, 8, 12);
                 line(`Match: ${r.match}`, 8, 12);
                 line(`Context: ${r.context || r.note || ''}`, 8, 14);
+                line(`Source: ${r.source || 'working-tree'}${r.commit ? ` | Commit: ${r.commit}` : ''}`, 8, 12);
+                if (r.historical) line(`Commit: ${r.commitMessage || ''}`, 8, 12);
                 y += 5;
             });
             doc.save(`secretburrow-findings-${new Date().toISOString().slice(0,10)}.pdf`);
@@ -2175,6 +2596,29 @@
         function applyTheme(theme) { document.documentElement.classList.toggle('light', theme === 'light'); }
 
         // Tabs
+        function updateGitHistoryControls() {
+            const show = activeMode === 'code';
+            gitHistoryControls.classList.toggle('hidden', !show);
+        }
+
+        gitHistoryScanToggle.checked = localStorage.getItem('secretburrow_git_history') === '1';
+        gitHistoryVerboseToggle.checked = localStorage.getItem('secretburrow_git_history_verbose') === '1';
+        gitHistoryDepth.value = localStorage.getItem('secretburrow_git_history_depth') || '25';
+        gitHistoryScanToggle.addEventListener('change', () => {
+            localStorage.setItem('secretburrow_git_history', gitHistoryScanToggle.checked ? '1' : '0');
+            logStatus(`Git previous-version scanning ${gitHistoryScanToggle.checked ? 'enabled' : 'disabled'}.`, 'info', true);
+        });
+        gitHistoryVerboseToggle.addEventListener('change', () => {
+            localStorage.setItem('secretburrow_git_history_verbose', gitHistoryVerboseToggle.checked ? '1' : '0');
+            if (gitHistoryVerboseToggle.checked) verboseToggle.checked = true;
+            if (gitHistoryVerboseToggle.checked) verbose = true;
+            localStorage.setItem('secretburrow_verbose', verbose ? '1' : '0');
+            logStatus(`Git history verbose telemetry ${gitHistoryVerboseToggle.checked ? 'enabled' : 'disabled'}.`, 'info', true);
+        });
+        gitHistoryDepth.addEventListener('change', () => {
+            localStorage.setItem('secretburrow_git_history_depth', gitHistoryDepth.value);
+        });
+
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -2186,6 +2630,7 @@
                     : 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings';
                 modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : 'Firmware';
                 patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+                updateGitHistoryControls();
                 logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : 'Firmware'} mode.`, 'info', true);
             });
         });
@@ -2198,8 +2643,46 @@
         dropzone.addEventListener('drop', e => queueFiles(e.dataTransfer.files));
         dropzone.addEventListener('click', e => { if (!e.target.closest('button')) fileInput.click(); });
         dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+        async function pickDirectoryWithAccessAPI() {
+            if (!window.showDirectoryPicker) {
+                folderInput.click();
+                return;
+            }
+            try {
+                const rootHandle = await window.showDirectoryPicker({ mode: 'read' });
+                const collected = [];
+                const walk = async (dirHandle, prefix = '') => {
+                    for await (const entry of dirHandle.values()) {
+                        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+                        if (entry.kind === 'directory') {
+                            if (verbose && relative.split('/').length <= 3) logStatus(`verbose: entering directory ${relative}`, 'verbose');
+                            await walk(entry, relative);
+                        } else {
+                            try {
+                                const file = await entry.getFile();
+                                file._secretburrowRelativePath = relative;
+                                collected.push(file);
+                                if (verbose && collected.length <= 120) logStatus(`verbose: seeing file ${relative}`, 'verbose');
+                            } catch (error) {
+                                logStatus(`ERROR reading directory entry ${relative}: ${error.message}`, 'error', true);
+                            }
+                        }
+                    }
+                };
+                await walk(rootHandle, rootHandle.name);
+                queueFiles(collected);
+                logStatus(`Directory picker loaded ${collected.length} files from ${rootHandle.name}.`, 'success', true);
+            } catch (error) {
+                if (error?.name === 'AbortError') {
+                    logStatus('Directory selection cancelled.', 'warn', true);
+                    return;
+                }
+                logStatus(`Directory picker failed: ${error.message}; using browser folder input.`, 'warn', true);
+                folderInput.click();
+            }
+        }
         document.getElementById('browse-files').addEventListener('click', () => fileInput.click());
-        document.getElementById('browse-folder').addEventListener('click', () => folderInput.click());
+        document.getElementById('browse-folder').addEventListener('click', () => pickDirectoryWithAccessAPI());
         fileInput.addEventListener('change', e => queueFiles(e.target.files));
         folderInput.addEventListener('change', e => queueFiles(e.target.files));
         scanBtn.addEventListener('click', startScan);
@@ -2311,6 +2794,7 @@
         logStatus(`Engine loaded: ${currentPatterns.length} ${activeMode} patterns + universal encoding/crypto/hash heuristics.`, 'info', true);
         logStatus(`Verbose telemetry: ${verbose ? 'ON' : 'OFF'}.`, 'info', true);
         updateFileSummary();
+        updateGitHistoryControls();
         setProgress(0, 'Waiting for input');
         </script>
 </body>
