@@ -658,6 +658,52 @@
             .binary-table { min-width: 560px; }
         }
 
+        /* Responsive mode navigation: the base flex rules previously forced long labels
+           into one row on narrow screens. Use an adaptive grid instead. */
+        .tab-bar {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 4px;
+            min-width: 0;
+            align-items: stretch;
+        }
+        .tab-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            width: 100%;
+            padding: 0.65rem 0.35rem;
+            line-height: 1.25;
+            text-align: center;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+        @media (max-width: 1100px) {
+            .tab-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+            .tab-bar {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 5px;
+                padding: 5px;
+            }
+            .tab-btn {
+                min-height: 44px;
+                padding: 0.65rem 0.4rem;
+                font-size: 0.73rem;
+            }
+            .tab-btn:last-child { grid-column: 1 / -1; }
+            #source-panel { padding: 1rem; gap: 1rem; }
+            #source-panel .panel-header { align-items: flex-start; flex-wrap: wrap; }
+            #source-panel .panel-title { min-width: 0; overflow-wrap: anywhere; }
+        }
+        @media (max-width: 360px) {
+            .tab-bar { grid-template-columns: minmax(0, 1fr); }
+            .tab-btn:last-child { grid-column: auto; }
+        }
+
     </style>
 </head>
 <body>
