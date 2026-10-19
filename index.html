@@ -135,6 +135,8 @@
             header { padding: 0.9rem 1rem; }
             main { padding: 1rem; gap: 1rem; }
             .creator-credit { padding-left: 0; }
+            .tab-bar { flex-wrap: wrap; }
+            .tab-btn { flex: 1 1 calc(50% - 4px); min-width: 0; white-space: nowrap; padding: 0.6rem 0.4rem; font-size: 0.72rem; }
         }
 
         .panel {
@@ -575,8 +577,10 @@
         .hidden { display: none !important; }
 
 
-        /* Binary workbench: independent from the existing secret-scanning pipeline. */
-        .binary-workbench { grid-column: 1 / -1; }
+        /* Binary Workbench shares the same mode selector as Code, Firmware, APK, and Git. */
+        #standard-mode-content { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+        main.binary-mode-active { grid-template-columns: minmax(0, 1fr); }
+        .binary-workbench { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; width: 100%; }
         .binary-workbench .panel-header { align-items: flex-start; }
         .binary-subtitle { color: var(--text-secondary); font-size: 0.78rem; margin-top: 0.25rem; max-width: 760px; }
         .binary-upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
@@ -650,7 +654,6 @@
             .binary-meta-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
             .binary-meta-card { padding: 0.65rem; }
             .binary-view-btn { padding: 0.65rem 0.35rem; font-size: 0.65rem; }
-            .binary-workbench { padding: 1rem; }
             .binary-file-name { flex-basis: 100%; }
             .binary-table { min-width: 560px; }
         }
@@ -674,9 +677,9 @@
     </header>
 
     <main>
-        <section class="panel">
+        <section class="panel" id="source-panel">
             <div class="panel-header">
-                <div class="panel-title">📂 Target Firmware / Source</div>
+                <div class="panel-title" id="mode-panel-title">📂 Target Firmware / Source</div>
                 <div id="engine-status" class="badge">IDLE</div>
             </div>
 
@@ -685,9 +688,102 @@
                 <button class="tab-btn" data-mode="firmware">Firmware Mode</button>
                 <button class="tab-btn" data-mode="apk">APK Mode</button>
                 <button class="tab-btn" data-mode="git">.git Mode</button>
+                <button class="tab-btn" data-mode="binary">🧪 Binary Workbench</button>
             </div>
 
-            <div class="git-history-controls" id="git-history-controls">
+            <div class="binary-workbench hidden" id="binary-lab-panel" aria-labelledby="binary-lab-title">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title" id="binary-lab-title">Executable & Firmware Inspection <span class="badge success">LOCAL / STATIC</span></div>
+                    <p class="binary-subtitle">Inspect Windows EXE/DLL files, ELF binaries, shared libraries, APKs, and firmware locally: printable strings, file signatures, architecture hints, a hex view, and strace-inspired static indicators.</p>
+                </div>
+                <span class="badge" id="binary-engine-badge">NO FILE</span>
+            </div>
+
+            <div class="binary-upload-row">
+                <label class="binary-file-label" for="binary-file-input">＋ Choose Binary / EXE / DLL
+                    <input type="file" id="binary-file-input" class="file-input-hidden" aria-label="Choose a binary file">
+                </label>
+                <span class="binary-file-name" id="binary-file-name">No binary selected</span>
+                <button class="btn btn-primary" id="binary-analyze-btn" type="button" disabled>Analyze Binary</button>
+            </div>
+            <div class="binary-dropzone" id="binary-dropzone" tabindex="0" role="button" aria-label="Drop a binary file here or browse">
+                <strong>Drop a Windows EXE/DLL, SYS driver, ELF/SO library, APK, firmware blob, or raw binary here</strong>
+                <span>Windows PE (.exe / .dll / .sys) · ELF (.so) · Mach-O · DEX · WebAssembly · raw binary</span>
+                <small>Client-side only · maximum 64 MiB per file · file contents are not sent to a server</small>
+            </div>
+            <div class="binary-status" id="binary-status" role="status" aria-live="polite">Select a file to begin. The analyzer reads bytes locally and never executes the uploaded binary.</div>
+
+            <div class="binary-meta-grid" id="binary-meta-grid">
+                <div class="binary-meta-card"><span class="binary-meta-label">Format</span><span class="binary-meta-value">Waiting</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">Architecture</span><span class="binary-meta-value">Waiting</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">Size</span><span class="binary-meta-value">—</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">SHA-256</span><span class="binary-meta-value">Not calculated</span></div>
+            </div>
+            <div class="binary-meta-note" id="binary-meta-note">Header details and digest will appear after analysis.</div>
+
+            <div class="binary-view-tabs" role="tablist" aria-label="Binary analysis views">
+                <button class="binary-view-btn active" data-binary-view="strings" type="button" role="tab" aria-selected="true">Strings</button>
+                <button class="binary-view-btn" data-binary-view="trace" type="button" role="tab" aria-selected="false">Trace Hints</button>
+                <button class="binary-view-btn" data-binary-view="hex" type="button" role="tab" aria-selected="false">Hex View</button>
+            </div>
+
+            <div class="binary-view active" id="binary-view-strings" role="tabpanel">
+                <div class="binary-view-heading">
+                    <h3>String extraction</h3>
+                    <span class="badge" id="binary-strings-count">0 strings</span>
+                </div>
+                <div class="binary-toolbar">
+                    <input class="binary-search" id="binary-string-search" type="search" placeholder="Filter strings, offsets, or encoding…" aria-label="Filter extracted strings">
+                    <label class="binary-check"><input id="binary-show-ascii" type="checkbox" checked> ASCII</label>
+                    <label class="binary-check"><input id="binary-show-utf16le" type="checkbox" checked> UTF-16LE</label>
+                    <label class="binary-check"><input id="binary-show-utf16be" type="checkbox" checked> UTF-16BE</label>
+                </div>
+                <div class="findings-meta" id="binary-strings-meta">No strings extracted yet.</div>
+                <div class="binary-table-wrap">
+                    <table class="binary-table">
+                        <thead><tr><th>File offset</th><th>Encoding</th><th>Extracted string (select to inspect bytes)</th><th>Action</th></tr></thead>
+                        <tbody id="binary-strings-body"><tr><td colspan="4" class="binary-empty">Choose and analyze a binary to extract strings.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="binary-load-more-row"><button class="browse-btn" id="binary-load-more" type="button" hidden>Load more strings</button></div>
+                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-strings" type="button" disabled>Export Strings (.txt)</button></div>
+            </div>
+
+            <div class="binary-view" id="binary-view-trace" role="tabpanel" hidden>
+                <div class="binary-view-heading">
+                    <h3>strace-inspired static indicators</h3>
+                    <span class="badge" id="binary-trace-count">0 indicators</span>
+                </div>
+                <div class="binary-note"><strong>Important:</strong> this is not a live syscall trace. A browser page cannot attach native <code>ptrace</code> or run arbitrary host executables. These are possible API/syscall references found in strings or symbol-like text, shown with file offsets, not observed runtime events. Matches can be false positives.</div>
+                <div class="findings-meta" id="binary-trace-meta">No indicators calculated yet.</div>
+                <div class="binary-table-wrap">
+                    <table class="binary-table">
+                        <thead><tr><th>Area</th><th>Indicator</th><th>File offset</th><th>Evidence</th><th>Interpretation</th></tr></thead>
+                        <tbody id="binary-trace-body"><tr><td colspan="5" class="binary-empty">Analyze a binary to generate static indicators.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-trace" type="button" disabled>Export Indicators (.csv)</button></div>
+            </div>
+
+            <div class="binary-view" id="binary-view-hex" role="tabpanel" hidden>
+                <div class="binary-view-heading">
+                    <h3>Hex / ASCII viewer</h3>
+                    <span class="badge" id="binary-hex-range">0 bytes</span>
+                </div>
+                <div class="binary-hex-toolbar">
+                    <label for="binary-hex-offset" class="binary-check">Start offset</label>
+                    <input class="binary-offset-input" id="binary-hex-offset" type="text" value="0x00000000" inputmode="text" aria-label="Hex view start offset">
+                    <button class="browse-btn" id="binary-hex-jump" type="button">Go</button>
+                    <button class="browse-btn" id="binary-hex-prev" type="button" disabled>← Previous</button>
+                    <button class="browse-btn" id="binary-hex-next" type="button" disabled>Next →</button>
+                </div>
+                <pre class="binary-hex-output" id="binary-hex-output">Load a binary to view its bytes.</pre>
+            </div>
+            </div><!-- /binary-lab-panel -->
+
+            <div id="standard-mode-content">
+                <div class="git-history-controls" id="git-history-controls">
                 <div class="git-history-title" id="git-history-title">🧬 Git Object Database Analysis</div>
                 <label class="git-option">
                     <input type="checkbox" id="git-history-scan">
@@ -767,9 +863,10 @@
                     <span>Scanning...</span>
                 </div>
             </button>
+            </div><!-- /standard-mode-content -->
         </section>
 
-        <section class="panel">
+        <section class="panel" id="findings-panel">
             <div class="panel-header">
                 <div class="panel-title">🚨 Findings</div>
                 <div id="result-count" class="badge">0 FINDINGS</div>
@@ -805,96 +902,7 @@
         </section>
 
 
-        <section class="panel binary-workbench" id="binary-lab-panel" aria-labelledby="binary-lab-title">
-            <div class="panel-header">
-                <div>
-                    <div class="panel-title" id="binary-lab-title">🧪 Binary Workbench <span class="badge success">LOCAL / STATIC</span></div>
-                    <p class="binary-subtitle">Inspect executable and firmware bytes in the browser: printable strings, file signatures, architecture hints, a hex view, and strace-inspired static indicators.</p>
-                </div>
-                <span class="badge" id="binary-engine-badge">NO FILE</span>
-            </div>
 
-            <div class="binary-upload-row">
-                <label class="binary-file-label" for="binary-file-input">＋ Choose Binary
-                    <input type="file" id="binary-file-input" class="file-input-hidden" aria-label="Choose a binary file">
-                </label>
-                <span class="binary-file-name" id="binary-file-name">No binary selected</span>
-                <button class="btn btn-primary" id="binary-analyze-btn" type="button" disabled>Analyze Binary</button>
-            </div>
-            <div class="binary-dropzone" id="binary-dropzone" tabindex="0" role="button" aria-label="Drop a binary file here or browse">
-                <strong>Drop one executable, library, APK, or firmware blob here</strong>
-                <span>ELF · PE/COFF · Mach-O · DEX · WebAssembly · raw binary</span>
-                <small>Client-side only · maximum 64 MiB per file · file contents are not sent to a server</small>
-            </div>
-            <div class="binary-status" id="binary-status" role="status" aria-live="polite">Select a file to begin. The analyzer reads bytes locally and never executes the uploaded binary.</div>
-
-            <div class="binary-meta-grid" id="binary-meta-grid">
-                <div class="binary-meta-card"><span class="binary-meta-label">Format</span><span class="binary-meta-value">Waiting</span></div>
-                <div class="binary-meta-card"><span class="binary-meta-label">Architecture</span><span class="binary-meta-value">Waiting</span></div>
-                <div class="binary-meta-card"><span class="binary-meta-label">Size</span><span class="binary-meta-value">—</span></div>
-                <div class="binary-meta-card"><span class="binary-meta-label">SHA-256</span><span class="binary-meta-value">Not calculated</span></div>
-            </div>
-            <div class="binary-meta-note" id="binary-meta-note">Header details and digest will appear after analysis.</div>
-
-            <div class="binary-view-tabs" role="tablist" aria-label="Binary analysis views">
-                <button class="binary-view-btn active" data-binary-view="strings" type="button" role="tab" aria-selected="true">Strings</button>
-                <button class="binary-view-btn" data-binary-view="trace" type="button" role="tab" aria-selected="false">Trace Hints</button>
-                <button class="binary-view-btn" data-binary-view="hex" type="button" role="tab" aria-selected="false">Hex View</button>
-            </div>
-
-            <div class="binary-view active" id="binary-view-strings" role="tabpanel">
-                <div class="binary-view-heading">
-                    <h3>String extraction</h3>
-                    <span class="badge" id="binary-strings-count">0 strings</span>
-                </div>
-                <div class="binary-toolbar">
-                    <input class="binary-search" id="binary-string-search" type="search" placeholder="Filter strings, offsets, or encoding…" aria-label="Filter extracted strings">
-                    <label class="binary-check"><input id="binary-show-ascii" type="checkbox" checked> ASCII</label>
-                    <label class="binary-check"><input id="binary-show-utf16le" type="checkbox" checked> UTF-16LE</label>
-                    <label class="binary-check"><input id="binary-show-utf16be" type="checkbox" checked> UTF-16BE</label>
-                </div>
-                <div class="findings-meta" id="binary-strings-meta">No strings extracted yet.</div>
-                <div class="binary-table-wrap">
-                    <table class="binary-table">
-                        <thead><tr><th>File offset</th><th>Encoding</th><th>Extracted string (select to inspect bytes)</th><th>Action</th></tr></thead>
-                        <tbody id="binary-strings-body"><tr><td colspan="4" class="binary-empty">Choose and analyze a binary to extract strings.</td></tr></tbody>
-                    </table>
-                </div>
-                <div class="binary-load-more-row"><button class="browse-btn" id="binary-load-more" type="button" hidden>Load more strings</button></div>
-                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-strings" type="button" disabled>Export Strings (.txt)</button></div>
-            </div>
-
-            <div class="binary-view" id="binary-view-trace" role="tabpanel" hidden>
-                <div class="binary-view-heading">
-                    <h3>strace-inspired static indicators</h3>
-                    <span class="badge" id="binary-trace-count">0 indicators</span>
-                </div>
-                <div class="binary-note"><strong>Important:</strong> this is not a live syscall trace. A browser page cannot attach native <code>ptrace</code> or run arbitrary host executables. These are possible API/syscall references found in strings or symbol-like text, shown with file offsets, not observed runtime events. Matches can be false positives.</div>
-                <div class="findings-meta" id="binary-trace-meta">No indicators calculated yet.</div>
-                <div class="binary-table-wrap">
-                    <table class="binary-table">
-                        <thead><tr><th>Area</th><th>Indicator</th><th>File offset</th><th>Evidence</th><th>Interpretation</th></tr></thead>
-                        <tbody id="binary-trace-body"><tr><td colspan="5" class="binary-empty">Analyze a binary to generate static indicators.</td></tr></tbody>
-                    </table>
-                </div>
-                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-trace" type="button" disabled>Export Indicators (.csv)</button></div>
-            </div>
-
-            <div class="binary-view" id="binary-view-hex" role="tabpanel" hidden>
-                <div class="binary-view-heading">
-                    <h3>Hex / ASCII viewer</h3>
-                    <span class="badge" id="binary-hex-range">0 bytes</span>
-                </div>
-                <div class="binary-hex-toolbar">
-                    <label for="binary-hex-offset" class="binary-check">Start offset</label>
-                    <input class="binary-offset-input" id="binary-hex-offset" type="text" value="0x00000000" inputmode="text" aria-label="Hex view start offset">
-                    <button class="browse-btn" id="binary-hex-jump" type="button">Go</button>
-                    <button class="browse-btn" id="binary-hex-prev" type="button" disabled>← Previous</button>
-                    <button class="browse-btn" id="binary-hex-next" type="button" disabled>Next →</button>
-                </div>
-                <pre class="binary-hex-output" id="binary-hex-output">Load a binary to view its bytes.</pre>
-            </div>
-        </section>
 
     </main>
 
@@ -3158,19 +3166,33 @@
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 activeMode = btn.dataset.mode;
-                currentPatterns = loadPatterns(activeMode);
+                const isBinaryMode = activeMode === 'binary';
+                if (!isBinaryMode) currentPatterns = loadPatterns(activeMode);
+                document.getElementById('standard-mode-content').classList.toggle('hidden', isBinaryMode);
+                document.getElementById('binary-lab-panel').classList.toggle('hidden', !isBinaryMode);
+                document.getElementById('findings-panel').classList.toggle('hidden', isBinaryMode);
+                document.querySelector('main').classList.toggle('binary-mode-active', isBinaryMode);
+                document.getElementById('mode-panel-title').textContent = isBinaryMode ? '🧪 Binary Workbench' : '📂 Target Firmware / Source';
+                document.getElementById('engine-status').classList.toggle('hidden', isBinaryMode);
                 modeSubtext.textContent = activeMode === 'code'
                     ? 'Recursive source/config/archive analysis with multiple encodings and archive formats'
                     : activeMode === 'firmware'
                         ? 'Binary-safe firmware triage, entropy, SquashFS/WRGG19 heuristics, raw-LZMA probes, and strings'
                         : activeMode === 'apk'
                             ? 'Android APK package analysis: manifest, DEX/resources, embedded files, secrets, URLs, and local decoding'
-                            : 'Git object-database reconstruction: commits, trees, blobs, branches, tags, refs, and leaked secrets';
-                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : activeMode === 'apk' ? 'Android APK' : '.git Object Database';
+                            : activeMode === 'git'
+                                ? 'Git object-database reconstruction: commits, trees, blobs, branches, tags, refs, and leaked secrets'
+                                : 'Static analysis for Windows EXE/DLL, ELF/SO, Mach-O, APK/DEX, firmware and raw binary files';
+                modalModeLabel.textContent = activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : activeMode === 'apk' ? 'Android APK' : activeMode === 'git' ? '.git Object Database' : 'Binary Workbench';
                 fileInput.accept = activeMode === 'apk' ? '.apk,.xapk,.apks,.zip,application/vnd.android.package-archive' : '';
                 patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+                patternsInput.disabled = isBinaryMode;
+                document.querySelectorAll('#settings-modal .form-group').forEach((group, index) => {
+                    if (index > 0) group.classList.toggle('hidden', isBinaryMode);
+                });
                 updateGitHistoryControls();
-                logStatus(`Engine switched to ${activeMode === 'code' ? 'Code Repo' : activeMode === 'firmware' ? 'Firmware' : activeMode === 'apk' ? 'Android APK' : '.git Object Database'} mode.`, 'info', true);
+                const modeLabels = { code: 'Code Repo', firmware: 'Firmware', apk: 'Android APK', git: '.git Object Database', binary: 'Binary Workbench' };
+                logStatus(`Engine switched to ${modeLabels[activeMode] || activeMode} mode.`, 'info', true);
             });
         });
 
@@ -3277,26 +3299,37 @@
         document.getElementById('settings-btn').addEventListener('click', () => {
             themeSelect.value = currentTheme;
             patternsInput.value = JSON.stringify(currentPatterns, null, 2);
+            patternsInput.disabled = activeMode === 'binary';
+            document.querySelectorAll('#settings-modal .form-group').forEach((group, index) => {
+                if (index > 0) group.classList.toggle('hidden', activeMode === 'binary');
+            });
             settingsModal.classList.add('active');
         });
         document.getElementById('close-modal').addEventListener('click', () => settingsModal.classList.remove('active'));
         settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.remove('active'); });
         document.getElementById('save-settings').addEventListener('click', () => {
             try {
-                const newPatterns = JSON.parse(patternsInput.value);
-                if (!Array.isArray(newPatterns)) throw new Error('Patterns must be a JSON array.');
                 const newTheme = themeSelect.value;
-                localStorage.setItem(`customPatterns_${activeMode}`, JSON.stringify(newPatterns));
+                if (activeMode !== 'binary') {
+                    const newPatterns = JSON.parse(patternsInput.value);
+                    if (!Array.isArray(newPatterns)) throw new Error('Patterns must be a JSON array.');
+                    localStorage.setItem(`customPatterns_${activeMode}`, JSON.stringify(newPatterns));
+                    currentPatterns = newPatterns;
+                }
                 localStorage.setItem('theme', newTheme);
-                currentPatterns = newPatterns; currentTheme = newTheme; applyTheme(currentTheme);
+                currentTheme = newTheme; applyTheme(currentTheme);
                 settingsModal.classList.remove('active');
-                logStatus(`${activeMode.toUpperCase()} engine configuration saved.`, 'success', true);
+                logStatus(activeMode === 'binary' ? 'Theme saved. Binary Workbench uses built-in static indicators, not custom secret-scanner regex patterns.' : `${activeMode.toUpperCase()} engine configuration saved.`, 'success', true);
             } catch (error) {
                 logStatus(`SETTINGS ERROR: ${error.message}`, 'error', true);
                 alert('Invalid pattern JSON. Check the terminal for details.');
             }
         });
         document.getElementById('reset-settings').addEventListener('click', () => {
+            if (activeMode === 'binary') {
+                logStatus('Binary Workbench uses built-in static indicators; there are no custom regex patterns to reset.', 'info', true);
+                return;
+            }
             localStorage.removeItem(`customPatterns_${activeMode}`);
             currentPatterns = activeMode === 'code' ? CODE_REPO_PATTERNS : activeMode === 'firmware' ? FIRMWARE_PATTERNS : activeMode === 'apk' ? APK_PATTERNS : GIT_PATTERNS;
             patternsInput.value = JSON.stringify(currentPatterns, null, 2);
@@ -3330,7 +3363,7 @@
 
 
 
-        // --- Binary Workbench: local static triage, separate from the original secret scanner. ---
+        // --- Binary Workbench mode: local static triage, integrated with the existing mode selector. ---
         const BINARY_MAX_BYTES = 64 * 1024 * 1024;
         const BINARY_MAX_STRINGS = 30000;
         const BINARY_STRING_PAGE = 300;
@@ -3431,11 +3464,16 @@
                 const peOffset = binaryReadU32(bytes, 0x3c, true);
                 if (peOffset + 26 <= bytes.length && binaryAsciiAt(bytes, peOffset, 'PE\0\0')) {
                     const machine = binaryReadU16(bytes, peOffset + 4, true);
+                    const sectionCount = binaryReadU16(bytes, peOffset + 6, true);
+                    const characteristics = binaryReadU16(bytes, peOffset + 22, true);
                     const optionalMagic = binaryReadU16(bytes, peOffset + 24, true);
+                    const peBits = optionalMagic === 0x20b ? 'PE32+' : optionalMagic === 0x10b ? 'PE32' : 'PE/COFF';
+                    const imageKind = (characteristics & 0x2000) ? 'Windows DLL' : (characteristics & 0x0002) ? 'Windows EXE' : 'Windows PE image';
                     const machines = { 0x014c: 'x86', 0x8664: 'x86-64', 0x01c0: 'ARM', 0x01c4: 'ARMv7', 0xaa64: 'ARM64', 0x0200: 'IA-64', 0x5032: 'RISC-V 32', 0x5064: 'RISC-V 64', 0x5128: 'RISC-V 128' };
-                    format = optionalMagic === 0x20b ? 'PE32+ / Windows executable' : optionalMagic === 0x10b ? 'PE32 / Windows executable' : 'PE/COFF executable';
+                    format = `${imageKind} (${peBits})`;
                     architecture = machines[machine] || `Machine 0x${machine.toString(16).toUpperCase()}`;
-                    details.push(`PE header at ${binaryHex(peOffset)}; COFF machine 0x${machine.toString(16).toUpperCase()}; optional-header magic ${binaryHex(optionalMagic, 4)}.`);
+                    const entryRva = optionalMagic === 0x20b || optionalMagic === 0x10b ? binaryReadU32(bytes, peOffset + 40, true) : 0;
+                    details.push(`PE header at ${binaryHex(peOffset)}; ${imageKind}; COFF machine 0x${machine.toString(16).toUpperCase()}; ${sectionCount} section(s); optional-header magic ${binaryHex(optionalMagic, 4)}; entry-point RVA ${binaryHex(entryRva)}; COFF characteristics 0x${characteristics.toString(16).padStart(4, '0').toUpperCase()}.`);
                 } else {
                     format = 'MZ / DOS executable candidate';
                     details.push('MZ signature found, but a valid PE signature was not found at the DOS header offset.');
@@ -3508,12 +3546,12 @@
         }
 
         const BINARY_TRACE_RULES = [
-            { area: 'File I/O', names: ['open','openat','openat2','creat','read','pread','pread64','write','pwrite','close','lseek','stat','fstat','newfstatat','access','faccessat','getdents','getdents64','unlink','unlinkat','rename','renameat','mkdir','mkdirat','chmod','fchmod','truncate','fsync','fdatasync'], note: 'File or descriptor operation may be referenced.' },
-            { area: 'Process / execution', names: ['execve','execveat','fork','vfork','clone','clone3','wait4','waitpid','exit','exit_group','kill','tgkill','tkill','prctl','ptrace','daemon','system','popen'], note: 'Process creation, execution, control, or lifecycle reference.' },
-            { area: 'Networking', names: ['socket','socketpair','connect','bind','listen','accept','accept4','sendto','recvfrom','sendmsg','recvmsg','send','recv','shutdown','getsockopt','setsockopt','getpeername','getsockname'], note: 'Socket or network-related API/syscall reference.' },
-            { area: 'Memory / code loading', names: ['mmap','mmap2','mprotect','munmap','mremap','brk','madvise','memfd_create','shmat','dlopen','dlsym','LoadLibrary','VirtualAlloc','VirtualProtect'], note: 'Memory mapping, protection change, or dynamic loading reference.' },
-            { area: 'Identity / privilege', names: ['getuid','geteuid','getgid','getegid','setuid','setreuid','setresuid','setgid','setregid','setresgid','capset','capget','setfsuid','setfsgid','no_new_privs'], note: 'Identity, credential, or privilege-control reference.' },
-            { area: 'System / IPC', names: ['ioctl','uname','sysinfo','getrandom','mount','umount2','reboot','pipe','pipe2','dup','dup2','dup3','eventfd','eventfd2','epoll_create','epoll_ctl','epoll_wait','poll','ppoll','select','pselect6','shmget','msgget','semget','futex','inotify_init','inotify_add_watch'], note: 'System, synchronization, event, or IPC reference.' }
+            { area: 'File I/O', names: ['open','openat','openat2','creat','read','pread','pread64','write','pwrite','close','lseek','stat','fstat','newfstatat','access','faccessat','getdents','getdents64','unlink','unlinkat','rename','renameat','mkdir','mkdirat','chmod','fchmod','truncate','fsync','fdatasync','CreateFileA','CreateFileW','ReadFile','WriteFile','DeleteFileA','DeleteFileW','MoveFileA','MoveFileW','FindFirstFileA','FindFirstFileW','GetFileAttributesA','GetFileAttributesW'], note: 'File or descriptor operation may be referenced.' },
+            { area: 'Process / execution', names: ['execve','execveat','fork','vfork','clone','clone3','wait4','waitpid','exit','exit_group','kill','tgkill','tkill','prctl','ptrace','daemon','system','popen','CreateProcessA','CreateProcessW','WinExec','ShellExecuteA','ShellExecuteW','OpenProcess','TerminateProcess','CreateRemoteThread','NtCreateThreadEx','RtlCreateUserThread','WaitForSingleObject'], note: 'Process creation, execution, control, or lifecycle reference.' },
+            { area: 'Networking', names: ['socket','socketpair','connect','bind','listen','accept','accept4','sendto','recvfrom','sendmsg','recvmsg','send','recv','shutdown','getsockopt','setsockopt','getpeername','getsockname','WSAStartup','WSASocketA','WSASocketW','InternetOpenA','InternetOpenW','InternetConnectA','InternetConnectW','HttpOpenRequestA','HttpOpenRequestW','HttpSendRequestA','HttpSendRequestW','WinHttpOpen','WinHttpConnect','WinHttpSendRequest'], note: 'Socket or network-related API/syscall reference.' },
+            { area: 'Memory / code loading', names: ['mmap','mmap2','mprotect','munmap','mremap','brk','madvise','memfd_create','shmat','dlopen','dlsym','LoadLibrary','LoadLibraryA','LoadLibraryW','GetProcAddress','VirtualAlloc','VirtualAllocEx','VirtualProtect','VirtualProtectEx','WriteProcessMemory','QueueUserAPC','SetWindowsHookExA','SetWindowsHookExW','MapViewOfFile','CreateFileMappingA','CreateFileMappingW'], note: 'Memory mapping, protection change, or dynamic loading reference.' },
+            { area: 'Identity / privilege', names: ['getuid','geteuid','getgid','getegid','setuid','setreuid','setresuid','setgid','setregid','setresgid','capset','capget','setfsuid','setfsgid','no_new_privs','OpenProcessToken','AdjustTokenPrivileges','LookupPrivilegeValueA','LookupPrivilegeValueW','ImpersonateLoggedOnUser','CheckTokenMembership'], note: 'Identity, credential, or privilege-control reference.' },
+            { area: 'System / IPC', names: ['ioctl','uname','sysinfo','getrandom','mount','umount2','reboot','pipe','pipe2','dup','dup2','dup3','eventfd','eventfd2','epoll_create','epoll_ctl','epoll_wait','poll','ppoll','select','pselect6','shmget','msgget','semget','futex','inotify_init','inotify_add_watch','RegOpenKeyA','RegOpenKeyW','RegSetValueExA','RegSetValueExW','CreateNamedPipeA','CreateNamedPipeW','CreateMutexA','CreateMutexW','CreateEventA','CreateEventW'], note: 'System, synchronization, event, registry, or IPC reference.' }
         ];
 
         function binaryTokens(text) {
