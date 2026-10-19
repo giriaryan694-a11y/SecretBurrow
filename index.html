@@ -573,6 +573,88 @@
         }
         footer strong { color: var(--accent); }
         .hidden { display: none !important; }
+
+
+        /* Binary workbench: independent from the existing secret-scanning pipeline. */
+        .binary-workbench { grid-column: 1 / -1; }
+        .binary-workbench .panel-header { align-items: flex-start; }
+        .binary-subtitle { color: var(--text-secondary); font-size: 0.78rem; margin-top: 0.25rem; max-width: 760px; }
+        .binary-upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+        .binary-file-label {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem;
+            min-height: 42px; padding: 0.65rem 0.9rem; border: 1px solid var(--border-subtle);
+            border-radius: var(--radius); background: var(--bg-elevated); color: var(--text-primary);
+            font: 700 0.78rem var(--font-mono); cursor: pointer;
+        }
+        .binary-file-label:hover { border-color: var(--accent); color: var(--accent); }
+        .binary-file-name { flex: 1; min-width: 180px; color: var(--text-secondary); font: 500 0.75rem var(--font-mono); overflow-wrap: anywhere; }
+        .binary-dropzone {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45rem;
+            min-height: 112px; padding: 1.1rem; border: 1px dashed var(--border-strong);
+            border-radius: var(--radius); background: var(--bg-base); text-align: center;
+            color: var(--text-secondary); cursor: pointer; transition: var(--transition);
+        }
+        .binary-dropzone:hover, .binary-dropzone.is-dragover { border-color: var(--accent); background: rgba(16,185,129,0.04); }
+        .binary-dropzone strong { color: var(--accent); }
+        .binary-dropzone small { font-size: 0.7rem; }
+        .binary-status {
+            padding: 0.7rem 0.85rem; border: 1px solid var(--border-subtle); border-radius: var(--radius);
+            background: var(--bg-base); color: var(--text-secondary); font: 500 0.75rem/1.55 var(--font-mono);
+            overflow-wrap: anywhere;
+        }
+        .binary-status.success { border-color: rgba(16,185,129,0.3); color: var(--accent); }
+        .binary-status.warn { border-color: rgba(245,158,11,0.3); color: var(--warning); }
+        .binary-status.error { border-color: rgba(239,68,68,0.3); color: var(--danger); }
+        .binary-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+        .binary-meta-card { min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 0.85rem; background: var(--bg-base); }
+        .binary-meta-label { display: block; color: var(--text-secondary); font: 700 0.65rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem; }
+        .binary-meta-value { display: block; color: var(--text-primary); font: 700 0.8rem/1.45 var(--font-mono); overflow-wrap: anywhere; }
+        .binary-meta-note { padding: 0.65rem 0.8rem; color: var(--text-secondary); background: var(--bg-base); border-radius: var(--radius); border-left: 2px solid var(--border-strong); font: 500 0.72rem/1.55 var(--font-mono); overflow-wrap: anywhere; }
+        .binary-view-tabs { display: flex; gap: 0.4rem; padding: 0.3rem; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius); }
+        .binary-view-btn { flex: 1; min-width: 0; padding: 0.68rem 0.8rem; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 700 0.75rem var(--font-mono); }
+        .binary-view-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+        .binary-view-btn.active { color: var(--accent); background: var(--bg-elevated); }
+        .binary-view { display: none; min-width: 0; }
+        .binary-view.active { display: block; }
+        .binary-view-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+        .binary-view-heading h3 { font-size: 0.9rem; }
+        .binary-toolbar { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+        .binary-search { flex: 1; min-width: 170px; padding: 0.65rem 0.75rem; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius); color: var(--text-primary); font: 500 0.75rem var(--font-mono); }
+        .binary-search:focus, .binary-offset-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .binary-check { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-secondary); font: 600 0.68rem var(--font-mono); white-space: nowrap; }
+        .binary-check input { accent-color: var(--accent); }
+        .binary-table-wrap { width: 100%; overflow: auto; max-height: 520px; border: 1px solid var(--border-subtle); border-radius: var(--radius); }
+        .binary-table { width: 100%; border-collapse: collapse; min-width: 640px; font: 500 0.72rem/1.55 var(--font-mono); }
+        .binary-table th { position: sticky; top: 0; z-index: 1; background: var(--bg-elevated); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; text-align: left; }
+        .binary-table th, .binary-table td { padding: 0.62rem 0.7rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+        .binary-table tr:last-child td { border-bottom: 0; }
+        .binary-table tbody tr:hover { background: rgba(16,185,129,0.045); }
+        .binary-offset { color: var(--info); white-space: nowrap; }
+        .binary-encoding { color: var(--accent); white-space: nowrap; }
+        .binary-string-cell { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 240px; color: var(--text-primary); cursor: pointer; }
+        .binary-row-button { padding: 0.25rem 0.45rem; border: 1px solid var(--border-subtle); border-radius: 5px; background: transparent; color: var(--text-secondary); cursor: pointer; font: 700 0.64rem var(--font-mono); }
+        .binary-row-button:hover { border-color: var(--accent); color: var(--accent); }
+        .binary-empty { padding: 2rem 1rem; color: var(--text-secondary); text-align: center; font: 500 0.75rem/1.6 var(--font-mono); }
+        .binary-load-more-row { display: flex; justify-content: center; padding-top: 0.75rem; }
+        .binary-note { margin-bottom: 0.8rem; padding: 0.75rem 0.85rem; border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius); background: rgba(245,158,11,0.045); color: var(--text-secondary); font: 500 0.73rem/1.6 var(--font-mono); }
+        .binary-note strong { color: var(--warning); }
+        .binary-chip { display: inline-block; padding: 0.12rem 0.4rem; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-secondary); font: 700 0.62rem var(--font-mono); white-space: nowrap; }
+        .binary-chip.watch { border-color: rgba(245,158,11,0.3); color: var(--warning); }
+        .binary-hex-toolbar { display: flex; gap: 0.55rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.7rem; }
+        .binary-offset-input { width: 150px; padding: 0.58rem 0.7rem; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius); color: var(--text-primary); font: 600 0.72rem var(--font-mono); }
+        .binary-hex-output { margin: 0; min-height: 180px; max-height: 530px; overflow: auto; padding: 1rem; border: 1px solid #27272a; border-radius: var(--radius); background: #050506; color: #a7f3d0; font: 500 0.72rem/1.75 var(--font-mono); white-space: pre; }
+        .binary-foot-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+        .binary-foot-actions .browse-btn { font-family: var(--font-mono); }
+        @media (max-width: 800px) { .binary-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 520px) {
+            .binary-meta-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+            .binary-meta-card { padding: 0.65rem; }
+            .binary-view-btn { padding: 0.65rem 0.35rem; font-size: 0.65rem; }
+            .binary-workbench { padding: 1rem; }
+            .binary-file-name { flex-basis: 100%; }
+            .binary-table { min-width: 560px; }
+        }
+
     </style>
 </head>
 <body>
@@ -721,6 +803,99 @@
                 </div>
             </div>
         </section>
+
+
+        <section class="panel binary-workbench" id="binary-lab-panel" aria-labelledby="binary-lab-title">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title" id="binary-lab-title">🧪 Binary Workbench <span class="badge success">LOCAL / STATIC</span></div>
+                    <p class="binary-subtitle">Inspect executable and firmware bytes in the browser: printable strings, file signatures, architecture hints, a hex view, and strace-inspired static indicators.</p>
+                </div>
+                <span class="badge" id="binary-engine-badge">NO FILE</span>
+            </div>
+
+            <div class="binary-upload-row">
+                <label class="binary-file-label" for="binary-file-input">＋ Choose Binary
+                    <input type="file" id="binary-file-input" class="file-input-hidden" aria-label="Choose a binary file">
+                </label>
+                <span class="binary-file-name" id="binary-file-name">No binary selected</span>
+                <button class="btn btn-primary" id="binary-analyze-btn" type="button" disabled>Analyze Binary</button>
+            </div>
+            <div class="binary-dropzone" id="binary-dropzone" tabindex="0" role="button" aria-label="Drop a binary file here or browse">
+                <strong>Drop one executable, library, APK, or firmware blob here</strong>
+                <span>ELF · PE/COFF · Mach-O · DEX · WebAssembly · raw binary</span>
+                <small>Client-side only · maximum 64 MiB per file · file contents are not sent to a server</small>
+            </div>
+            <div class="binary-status" id="binary-status" role="status" aria-live="polite">Select a file to begin. The analyzer reads bytes locally and never executes the uploaded binary.</div>
+
+            <div class="binary-meta-grid" id="binary-meta-grid">
+                <div class="binary-meta-card"><span class="binary-meta-label">Format</span><span class="binary-meta-value">Waiting</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">Architecture</span><span class="binary-meta-value">Waiting</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">Size</span><span class="binary-meta-value">—</span></div>
+                <div class="binary-meta-card"><span class="binary-meta-label">SHA-256</span><span class="binary-meta-value">Not calculated</span></div>
+            </div>
+            <div class="binary-meta-note" id="binary-meta-note">Header details and digest will appear after analysis.</div>
+
+            <div class="binary-view-tabs" role="tablist" aria-label="Binary analysis views">
+                <button class="binary-view-btn active" data-binary-view="strings" type="button" role="tab" aria-selected="true">Strings</button>
+                <button class="binary-view-btn" data-binary-view="trace" type="button" role="tab" aria-selected="false">Trace Hints</button>
+                <button class="binary-view-btn" data-binary-view="hex" type="button" role="tab" aria-selected="false">Hex View</button>
+            </div>
+
+            <div class="binary-view active" id="binary-view-strings" role="tabpanel">
+                <div class="binary-view-heading">
+                    <h3>String extraction</h3>
+                    <span class="badge" id="binary-strings-count">0 strings</span>
+                </div>
+                <div class="binary-toolbar">
+                    <input class="binary-search" id="binary-string-search" type="search" placeholder="Filter strings, offsets, or encoding…" aria-label="Filter extracted strings">
+                    <label class="binary-check"><input id="binary-show-ascii" type="checkbox" checked> ASCII</label>
+                    <label class="binary-check"><input id="binary-show-utf16le" type="checkbox" checked> UTF-16LE</label>
+                    <label class="binary-check"><input id="binary-show-utf16be" type="checkbox" checked> UTF-16BE</label>
+                </div>
+                <div class="findings-meta" id="binary-strings-meta">No strings extracted yet.</div>
+                <div class="binary-table-wrap">
+                    <table class="binary-table">
+                        <thead><tr><th>File offset</th><th>Encoding</th><th>Extracted string (select to inspect bytes)</th><th>Action</th></tr></thead>
+                        <tbody id="binary-strings-body"><tr><td colspan="4" class="binary-empty">Choose and analyze a binary to extract strings.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="binary-load-more-row"><button class="browse-btn" id="binary-load-more" type="button" hidden>Load more strings</button></div>
+                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-strings" type="button" disabled>Export Strings (.txt)</button></div>
+            </div>
+
+            <div class="binary-view" id="binary-view-trace" role="tabpanel" hidden>
+                <div class="binary-view-heading">
+                    <h3>strace-inspired static indicators</h3>
+                    <span class="badge" id="binary-trace-count">0 indicators</span>
+                </div>
+                <div class="binary-note"><strong>Important:</strong> this is not a live syscall trace. A browser page cannot attach native <code>ptrace</code> or run arbitrary host executables. These are possible API/syscall references found in strings or symbol-like text, shown with file offsets, not observed runtime events. Matches can be false positives.</div>
+                <div class="findings-meta" id="binary-trace-meta">No indicators calculated yet.</div>
+                <div class="binary-table-wrap">
+                    <table class="binary-table">
+                        <thead><tr><th>Area</th><th>Indicator</th><th>File offset</th><th>Evidence</th><th>Interpretation</th></tr></thead>
+                        <tbody id="binary-trace-body"><tr><td colspan="5" class="binary-empty">Analyze a binary to generate static indicators.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="binary-foot-actions"><button class="browse-btn" id="binary-export-trace" type="button" disabled>Export Indicators (.csv)</button></div>
+            </div>
+
+            <div class="binary-view" id="binary-view-hex" role="tabpanel" hidden>
+                <div class="binary-view-heading">
+                    <h3>Hex / ASCII viewer</h3>
+                    <span class="badge" id="binary-hex-range">0 bytes</span>
+                </div>
+                <div class="binary-hex-toolbar">
+                    <label for="binary-hex-offset" class="binary-check">Start offset</label>
+                    <input class="binary-offset-input" id="binary-hex-offset" type="text" value="0x00000000" inputmode="text" aria-label="Hex view start offset">
+                    <button class="browse-btn" id="binary-hex-jump" type="button">Go</button>
+                    <button class="browse-btn" id="binary-hex-prev" type="button" disabled>← Previous</button>
+                    <button class="browse-btn" id="binary-hex-next" type="button" disabled>Next →</button>
+                </div>
+                <pre class="binary-hex-output" id="binary-hex-output">Load a binary to view its bytes.</pre>
+            </div>
+        </section>
+
     </main>
 
     <div class="modal-overlay" id="settings-modal">
@@ -3152,6 +3327,463 @@
             reader.onerror = () => logStatus(`PATTERN IMPORT ERROR: could not read ${file.name}.`, 'error', true);
             reader.readAsText(file);
         }
+
+
+
+        // --- Binary Workbench: local static triage, separate from the original secret scanner. ---
+        const BINARY_MAX_BYTES = 64 * 1024 * 1024;
+        const BINARY_MAX_STRINGS = 30000;
+        const BINARY_STRING_PAGE = 300;
+        const BINARY_HEX_PAGE_BYTES = 512;
+        let binarySelectedFile = null;
+        let binaryBytes = null;
+        let binaryStrings = [];
+        let binaryFilteredStrings = [];
+        let binaryTraceHints = [];
+        let binaryRenderedStringCount = BINARY_STRING_PAGE;
+        let binaryMetadata = null;
+        let binaryHexOffset = 0;
+
+        const binaryFileInput = document.getElementById('binary-file-input');
+        const binaryDropzone = document.getElementById('binary-dropzone');
+        const binaryFileName = document.getElementById('binary-file-name');
+        const binaryAnalyzeBtn = document.getElementById('binary-analyze-btn');
+        const binaryStatus = document.getElementById('binary-status');
+        const binaryEngineBadge = document.getElementById('binary-engine-badge');
+        const binaryMetaGrid = document.getElementById('binary-meta-grid');
+        const binaryMetaNote = document.getElementById('binary-meta-note');
+        const binaryStringSearch = document.getElementById('binary-string-search');
+        const binaryStringsBody = document.getElementById('binary-strings-body');
+        const binaryStringsMeta = document.getElementById('binary-strings-meta');
+        const binaryStringsCount = document.getElementById('binary-strings-count');
+        const binaryLoadMore = document.getElementById('binary-load-more');
+        const binaryTraceBody = document.getElementById('binary-trace-body');
+        const binaryTraceMeta = document.getElementById('binary-trace-meta');
+        const binaryTraceCount = document.getElementById('binary-trace-count');
+        const binaryHexOutput = document.getElementById('binary-hex-output');
+        const binaryHexOffsetInput = document.getElementById('binary-hex-offset');
+
+        function setBinaryStatus(message, state = '') {
+            binaryStatus.className = `binary-status${state ? ` ${state}` : ''}`;
+            binaryStatus.textContent = message;
+        }
+
+        function formatBinarySize(size) {
+            if (!Number.isFinite(size)) return '—';
+            if (size < 1024) return `${size} B`;
+            if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KiB`;
+            return `${(size / (1024 * 1024)).toFixed(2)} MiB`;
+        }
+
+        function binaryHex(value, width = 8) {
+            return `0x${Math.max(0, Number(value) || 0).toString(16).toUpperCase().padStart(width, '0')}`;
+        }
+
+        function binaryReadU16(bytes, offset, little = true) {
+            if (offset < 0 || offset + 2 > bytes.length) return 0;
+            return little ? (bytes[offset] | (bytes[offset + 1] << 8)) : ((bytes[offset] << 8) | bytes[offset + 1]);
+        }
+
+        function binaryReadU32(bytes, offset, little = true) {
+            if (offset < 0 || offset + 4 > bytes.length) return 0;
+            if (little) return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+            return ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
+        }
+
+        function binaryReadU64Hex(bytes, offset, little = true) {
+            if (offset < 0 || offset + 8 > bytes.length) return 'out of range';
+            let value = 0n;
+            if (little) {
+                for (let i = 7; i >= 0; i--) value = (value << 8n) | BigInt(bytes[offset + i]);
+            } else {
+                for (let i = 0; i < 8; i++) value = (value << 8n) | BigInt(bytes[offset + i]);
+            }
+            return `0x${value.toString(16).toUpperCase()}`;
+        }
+
+        function binaryAsciiAt(bytes, offset, text) {
+            if (offset < 0 || offset + text.length > bytes.length) return false;
+            for (let i = 0; i < text.length; i++) if (bytes[offset + i] !== text.charCodeAt(i)) return false;
+            return true;
+        }
+
+        function parseBinaryMetadata(bytes, file) {
+            const size = bytes.length;
+            let format = 'Unknown / raw data';
+            let architecture = 'Not identified';
+            let details = [];
+            let entry = 'Not available';
+            const starts = (a) => bytes.length >= a.length && a.every((v, i) => bytes[i] === v);
+
+            if (bytes.length >= 20 && starts([0x7f, 0x45, 0x4c, 0x46])) {
+                const elfClass = bytes[4] === 1 ? 32 : bytes[4] === 2 ? 64 : null;
+                const little = bytes[5] === 1;
+                const endianLabel = bytes[5] === 1 ? 'little-endian' : bytes[5] === 2 ? 'big-endian' : 'unknown endianness';
+                const type = binaryReadU16(bytes, 16, little);
+                const machine = binaryReadU16(bytes, 18, little);
+                const elfTypes = { 0: 'ET_NONE', 1: 'ET_REL relocatable object', 2: 'ET_EXEC executable', 3: 'ET_DYN shared object / PIE candidate', 4: 'ET_CORE core dump' };
+                const machines = { 0: 'Unknown', 3: 'x86', 8: 'MIPS', 20: 'PowerPC', 21: 'PowerPC64', 22: 's390', 40: 'ARM', 62: 'x86-64', 183: 'AArch64', 243: 'RISC-V', 247: 'BPF' };
+                format = `ELF${elfClass || '?'} (${elfTypes[type] || `e_type ${type}`})`;
+                architecture = `${machines[machine] || `e_machine ${machine}`} · ${endianLabel}`;
+                entry = elfClass === 32 ? binaryHex(binaryReadU32(bytes, 24, little)) : elfClass === 64 ? binaryReadU64Hex(bytes, 24, little) : 'Unknown ELF class';
+                details.push(`ELF header: ${elfClass || 'unknown'}-bit class; ${endianLabel}; type ${type}; machine ${machine}; entry point ${entry}.`);
+            } else if (bytes.length >= 64 && starts([0x4d, 0x5a])) {
+                const peOffset = binaryReadU32(bytes, 0x3c, true);
+                if (peOffset + 26 <= bytes.length && binaryAsciiAt(bytes, peOffset, 'PE\0\0')) {
+                    const machine = binaryReadU16(bytes, peOffset + 4, true);
+                    const optionalMagic = binaryReadU16(bytes, peOffset + 24, true);
+                    const machines = { 0x014c: 'x86', 0x8664: 'x86-64', 0x01c0: 'ARM', 0x01c4: 'ARMv7', 0xaa64: 'ARM64', 0x0200: 'IA-64', 0x5032: 'RISC-V 32', 0x5064: 'RISC-V 64', 0x5128: 'RISC-V 128' };
+                    format = optionalMagic === 0x20b ? 'PE32+ / Windows executable' : optionalMagic === 0x10b ? 'PE32 / Windows executable' : 'PE/COFF executable';
+                    architecture = machines[machine] || `Machine 0x${machine.toString(16).toUpperCase()}`;
+                    details.push(`PE header at ${binaryHex(peOffset)}; COFF machine 0x${machine.toString(16).toUpperCase()}; optional-header magic ${binaryHex(optionalMagic, 4)}.`);
+                } else {
+                    format = 'MZ / DOS executable candidate';
+                    details.push('MZ signature found, but a valid PE signature was not found at the DOS header offset.');
+                }
+            } else if (starts([0xfe, 0xed, 0xfa, 0xce])) { format = 'Mach-O 32-bit (big-endian)'; architecture = 'Mach-O'; }
+            else if (starts([0xce, 0xfa, 0xed, 0xfe])) { format = 'Mach-O 32-bit (little-endian)'; architecture = 'Mach-O'; }
+            else if (starts([0xfe, 0xed, 0xfa, 0xcf])) { format = 'Mach-O 64-bit (big-endian)'; architecture = 'Mach-O'; }
+            else if (starts([0xcf, 0xfa, 0xed, 0xfe])) { format = 'Mach-O 64-bit (little-endian)'; architecture = 'Mach-O'; }
+            else if (starts([0xca, 0xfe, 0xba, 0xbe]) || starts([0xbe, 0xba, 0xfe, 0xca])) { format = 'Mach-O Universal / FAT binary'; architecture = 'Multiple architectures'; }
+            else if (starts([0x00, 0x61, 0x73, 0x6d])) { format = 'WebAssembly module'; architecture = 'WASM virtual machine'; }
+            else if (binaryAsciiAt(bytes, 0, 'dex\n')) { format = 'Dalvik Executable (DEX)'; architecture = 'Android / Dalvik VM'; }
+            else if (starts([0x50, 0x4b, 0x03, 0x04]) || starts([0x50, 0x4b, 0x05, 0x06]) || starts([0x50, 0x4b, 0x07, 0x08])) { format = 'ZIP container (possibly APK/JAR)'; architecture = 'Container'; }
+            else if (starts([0x1f, 0x8b])) { format = 'GZIP stream'; architecture = 'Compressed data'; }
+            else if (starts([0x25, 0x50, 0x44, 0x46])) { format = 'PDF document'; architecture = 'Document'; }
+
+            if (!details.length) details.push(`Browser-side signature check of ${file.name}. A familiar file signature was not conclusive; extension alone is not treated as proof of format.`);
+            details.push(`File: ${file.name}; ${formatBinarySize(size)}; no code was executed.`);
+            return { format, architecture, size, entry, details };
+        }
+
+        function extractBinaryStrings(bytes) {
+            const output = [];
+            const seen = new Set();
+            const add = (offset, encoding, text) => {
+                if (!text || text.length < 4 || output.length >= BINARY_MAX_STRINGS) return;
+                const value = text.length > 2048 ? `${text.slice(0, 2048)}… [truncated]` : text;
+                const key = `${offset}|${encoding}|${value}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                output.push({ offset, encoding, text: value });
+            };
+
+            // Printable 7-bit ASCII strings, matching the useful core of `strings -a -n 4`.
+            let start = -1;
+            let chars = '';
+            for (let i = 0; i <= bytes.length; i++) {
+                const b = i < bytes.length ? bytes[i] : 0;
+                if (b >= 0x20 && b <= 0x7e) {
+                    if (start < 0) { start = i; chars = ''; }
+                    if (chars.length < 4096) chars += String.fromCharCode(b);
+                } else {
+                    if (start >= 0 && i - start >= 4) add(start, 'ASCII', chars);
+                    start = -1; chars = '';
+                }
+                if (output.length >= BINARY_MAX_STRINGS) break;
+            }
+
+            // UTF-16 ASCII-range strings in either byte order; probe both alignments.
+            const scanUtf16 = (little, encoding) => {
+                for (let alignment = 0; alignment < 2 && output.length < BINARY_MAX_STRINGS; alignment++) {
+                    let runStart = -1, run = '';
+                    for (let i = alignment; i + 1 < bytes.length; i += 2) {
+                        const unit = little ? (bytes[i] | (bytes[i + 1] << 8)) : ((bytes[i] << 8) | bytes[i + 1]);
+                        if (unit >= 0x20 && unit <= 0x7e) {
+                            if (runStart < 0) { runStart = i; run = ''; }
+                            if (run.length < 4096) run += String.fromCharCode(unit);
+                        } else {
+                            if (runStart >= 0 && run.length >= 4) add(runStart, encoding, run);
+                            runStart = -1; run = '';
+                        }
+                        if (output.length >= BINARY_MAX_STRINGS) break;
+                    }
+                    if (runStart >= 0 && run.length >= 4) add(runStart, encoding, run);
+                }
+            };
+            scanUtf16(true, 'UTF-16LE');
+            scanUtf16(false, 'UTF-16BE');
+            output.sort((a, b) => a.offset - b.offset || a.encoding.localeCompare(b.encoding));
+            return output;
+        }
+
+        const BINARY_TRACE_RULES = [
+            { area: 'File I/O', names: ['open','openat','openat2','creat','read','pread','pread64','write','pwrite','close','lseek','stat','fstat','newfstatat','access','faccessat','getdents','getdents64','unlink','unlinkat','rename','renameat','mkdir','mkdirat','chmod','fchmod','truncate','fsync','fdatasync'], note: 'File or descriptor operation may be referenced.' },
+            { area: 'Process / execution', names: ['execve','execveat','fork','vfork','clone','clone3','wait4','waitpid','exit','exit_group','kill','tgkill','tkill','prctl','ptrace','daemon','system','popen'], note: 'Process creation, execution, control, or lifecycle reference.' },
+            { area: 'Networking', names: ['socket','socketpair','connect','bind','listen','accept','accept4','sendto','recvfrom','sendmsg','recvmsg','send','recv','shutdown','getsockopt','setsockopt','getpeername','getsockname'], note: 'Socket or network-related API/syscall reference.' },
+            { area: 'Memory / code loading', names: ['mmap','mmap2','mprotect','munmap','mremap','brk','madvise','memfd_create','shmat','dlopen','dlsym','LoadLibrary','VirtualAlloc','VirtualProtect'], note: 'Memory mapping, protection change, or dynamic loading reference.' },
+            { area: 'Identity / privilege', names: ['getuid','geteuid','getgid','getegid','setuid','setreuid','setresuid','setgid','setregid','setresgid','capset','capget','setfsuid','setfsgid','no_new_privs'], note: 'Identity, credential, or privilege-control reference.' },
+            { area: 'System / IPC', names: ['ioctl','uname','sysinfo','getrandom','mount','umount2','reboot','pipe','pipe2','dup','dup2','dup3','eventfd','eventfd2','epoll_create','epoll_ctl','epoll_wait','poll','ppoll','select','pselect6','shmget','msgget','semget','futex','inotify_init','inotify_add_watch'], note: 'System, synchronization, event, or IPC reference.' }
+        ];
+
+        function binaryTokens(text) {
+            return String(text || '').toLowerCase().replace(/^_+/, '').replace(/[^a-z0-9_]+/g, ' ').trim()
+                .split(/\s+/).filter(Boolean).flatMap(part => part.split('_').filter(Boolean))
+                .map(token => token.replace(/(?:64|_chk)$/, ''));
+        }
+
+        function buildBinaryTraceHints(strings) {
+            const hints = [];
+            const seen = new Set();
+            for (const item of strings) {
+                const tokens = new Set(binaryTokens(item.text));
+                for (const rule of BINARY_TRACE_RULES) {
+                    for (const name of rule.names) {
+                        const keyName = name.toLowerCase();
+                        if (!tokens.has(keyName)) continue;
+                        const key = `${rule.area}|${keyName}|${item.offset}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+                        hints.push({ area: rule.area, indicator: name, offset: item.offset, encoding: item.encoding, evidence: item.text, note: rule.note });
+                        if (hints.length >= 1500) return hints.sort((a, b) => a.offset - b.offset);
+                    }
+                }
+            }
+            return hints.sort((a, b) => a.offset - b.offset);
+        }
+
+        function renderBinaryMeta(meta, digest) {
+            const items = [
+                ['Format', meta.format],
+                ['Architecture', meta.architecture],
+                ['Size', formatBinarySize(meta.size)],
+                ['SHA-256', digest]
+            ];
+            binaryMetaGrid.replaceChildren();
+            for (const [label, value] of items) {
+                const card = document.createElement('div'); card.className = 'binary-meta-card';
+                const title = document.createElement('span'); title.className = 'binary-meta-label'; title.textContent = label;
+                const body = document.createElement('span'); body.className = 'binary-meta-value'; body.textContent = value || 'Unavailable';
+                if (label === 'SHA-256') body.title = value || 'Unavailable';
+                card.append(title, body); binaryMetaGrid.appendChild(card);
+            }
+            binaryMetaNote.textContent = meta.details.join(' ');
+        }
+
+        function selectBinaryFile(file) {
+            if (!file) return;
+            binarySelectedFile = file;
+            binaryBytes = null; binaryStrings = []; binaryFilteredStrings = []; binaryTraceHints = []; binaryMetadata = null; binaryHexOffset = 0;
+            binaryFileName.textContent = `${file.name} · ${formatBinarySize(file.size)}`;
+            binaryFileName.title = file.name;
+            binaryAnalyzeBtn.disabled = false;
+            binaryEngineBadge.textContent = 'READY'; binaryEngineBadge.className = 'badge success';
+            binaryMetaGrid.replaceChildren();
+            for (const [label, value] of [['Format','Waiting'],['Architecture','Waiting'],['Size',formatBinarySize(file.size)],['SHA-256','Not calculated']]) {
+                const card = document.createElement('div'); card.className = 'binary-meta-card';
+                const title = document.createElement('span'); title.className = 'binary-meta-label'; title.textContent = label;
+                const body = document.createElement('span'); body.className = 'binary-meta-value'; body.textContent = value;
+                card.append(title, body); binaryMetaGrid.appendChild(card);
+            }
+            binaryMetaNote.textContent = 'Ready to inspect locally. The file will not be executed.';
+            binaryStringsCount.textContent = '0 strings'; binaryTraceCount.textContent = '0 indicators';
+            binaryStringsMeta.textContent = 'Analyze the selected file to extract strings.';
+            binaryTraceMeta.textContent = 'Analyze the selected file to find static indicators.';
+            binaryStringsBody.innerHTML = '<tr><td colspan="4" class="binary-empty">Ready to analyze this file.</td></tr>';
+            binaryTraceBody.innerHTML = '<tr><td colspan="5" class="binary-empty">Ready to analyze this file.</td></tr>';
+            binaryHexOutput.textContent = 'Analyze the selected file to view bytes.';
+            binaryHexOffsetInput.value = '0x00000000';
+            binaryLoadMore.hidden = true;
+            document.getElementById('binary-export-strings').disabled = true;
+            document.getElementById('binary-export-trace').disabled = true;
+            setBinaryStatus(`Selected ${file.name}. Click “Analyze Binary” to inspect the bytes.`, 'success');
+        }
+
+        async function analyzeBinaryFile() {
+            const file = binarySelectedFile;
+            if (!file) return;
+            if (file.size > BINARY_MAX_BYTES) {
+                setBinaryStatus(`File is ${formatBinarySize(file.size)}; the browser workbench limit is ${formatBinarySize(BINARY_MAX_BYTES)}. Choose a smaller file or analyze a relevant carved segment.`, 'error');
+                return;
+            }
+            binaryAnalyzeBtn.disabled = true;
+            binaryEngineBadge.textContent = 'ANALYZING'; binaryEngineBadge.className = 'badge';
+            setBinaryStatus(`Reading ${file.name} locally and extracting static indicators…`, '');
+            try {
+                await new Promise(resolve => setTimeout(resolve, 20));
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                if (file !== binarySelectedFile) return;
+                binaryBytes = bytes;
+                binaryMetadata = parseBinaryMetadata(bytes, file);
+                binaryStrings = extractBinaryStrings(bytes);
+                binaryTraceHints = buildBinaryTraceHints(binaryStrings);
+                let digest = 'Unavailable in this browser context';
+                try {
+                    if (globalThis.crypto && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+                        const hash = await crypto.subtle.digest('SHA-256', bytes);
+                        digest = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
+                    }
+                } catch { /* Some file:// contexts disable Web Crypto; analysis remains useful. */ }
+                if (file !== binarySelectedFile) return;
+                renderBinaryMeta(binaryMetadata, digest);
+                binaryRenderedStringCount = BINARY_STRING_PAGE;
+                renderBinaryStrings();
+                renderBinaryTraceHints();
+                renderBinaryHex(0);
+                binaryEngineBadge.textContent = 'ANALYZED'; binaryEngineBadge.className = 'badge success';
+                setBinaryStatus(`Analysis complete: ${binaryStrings.length} strings and ${binaryTraceHints.length} static indicators. No executable was run; trace hints are inferred from file content, not runtime telemetry.`, 'success');
+                document.getElementById('binary-export-strings').disabled = binaryStrings.length === 0;
+                document.getElementById('binary-export-trace').disabled = binaryTraceHints.length === 0;
+            } catch (error) {
+                binaryEngineBadge.textContent = 'ERROR'; binaryEngineBadge.className = 'badge danger';
+                setBinaryStatus(`Analysis failed: ${error && error.message ? error.message : String(error)}`, 'error');
+            } finally {
+                binaryAnalyzeBtn.disabled = !binarySelectedFile;
+            }
+        }
+
+        function getFilteredBinaryStrings() {
+            const query = binaryStringSearch.value.trim().toLowerCase();
+            const allowed = new Set();
+            if (document.getElementById('binary-show-ascii').checked) allowed.add('ASCII');
+            if (document.getElementById('binary-show-utf16le').checked) allowed.add('UTF-16LE');
+            if (document.getElementById('binary-show-utf16be').checked) allowed.add('UTF-16BE');
+            return binaryStrings.filter(item => allowed.has(item.encoding) && (!query || item.text.toLowerCase().includes(query) || binaryHex(item.offset).toLowerCase().includes(query) || item.encoding.toLowerCase().includes(query)));
+        }
+
+        function renderBinaryStrings() {
+            binaryFilteredStrings = getFilteredBinaryStrings();
+            const shown = binaryFilteredStrings.slice(0, binaryRenderedStringCount);
+            binaryStringsBody.replaceChildren();
+            if (!shown.length) {
+                const row = document.createElement('tr'); const cell = document.createElement('td');
+                cell.colSpan = 4; cell.className = 'binary-empty'; cell.textContent = binaryStrings.length ? 'No strings match the current filter.' : 'No printable strings of at least four characters were detected.';
+                row.appendChild(cell); binaryStringsBody.appendChild(row);
+            } else {
+                for (const item of shown) {
+                    const row = document.createElement('tr');
+                    const offset = document.createElement('td'); offset.className = 'binary-offset'; offset.textContent = binaryHex(item.offset); offset.title = `Decimal offset ${item.offset}`;
+                    const encoding = document.createElement('td'); encoding.className = 'binary-encoding'; encoding.textContent = item.encoding;
+                    const value = document.createElement('td'); value.className = 'binary-string-cell'; value.textContent = item.text; value.title = 'Click to open this offset in the hex viewer';
+                    const action = document.createElement('td'); const button = document.createElement('button'); button.className = 'binary-row-button'; button.type = 'button'; button.textContent = 'HEX'; button.setAttribute('aria-label', `Show bytes near ${binaryHex(item.offset)}`);
+                    const jump = () => { binaryHexOffset = Math.max(0, item.offset - 32); binaryHexOffsetInput.value = binaryHex(binaryHexOffset); showBinaryView('hex'); renderBinaryHex(binaryHexOffset); };
+                    value.addEventListener('click', jump); button.addEventListener('click', jump); action.appendChild(button);
+                    row.append(offset, encoding, value, action); binaryStringsBody.appendChild(row);
+                }
+            }
+            binaryStringsCount.textContent = `${binaryStrings.length.toLocaleString()} strings`;
+            binaryStringsMeta.textContent = `${shown.length.toLocaleString()} of ${binaryFilteredStrings.length.toLocaleString()} matching strings shown · ${binaryStrings.length.toLocaleString()} total extracted · ASCII-range strings, minimum 4 characters.`;
+            binaryLoadMore.hidden = shown.length >= binaryFilteredStrings.length;
+            binaryLoadMore.textContent = `Load ${Math.min(BINARY_STRING_PAGE, binaryFilteredStrings.length - shown.length)} more strings`;
+        }
+
+        function renderBinaryTraceHints() {
+            binaryTraceBody.replaceChildren();
+            const shown = binaryTraceHints.slice(0, 1500);
+            if (!shown.length) {
+                const row = document.createElement('tr'); const cell = document.createElement('td');
+                cell.colSpan = 5; cell.className = 'binary-empty'; cell.textContent = binaryStrings.length ? 'No known API/syscall-like names matched the extracted strings. This does not prove the program has no such behavior.' : 'No indicators available until a binary is analyzed.';
+                row.appendChild(cell); binaryTraceBody.appendChild(row);
+            } else {
+                for (const item of shown) {
+                    const row = document.createElement('tr');
+                    const area = document.createElement('td'); area.textContent = item.area;
+                    const indicator = document.createElement('td'); const chip = document.createElement('span'); chip.className = 'binary-chip watch'; chip.textContent = item.indicator; indicator.appendChild(chip);
+                    const offset = document.createElement('td'); offset.className = 'binary-offset'; offset.textContent = binaryHex(item.offset);
+                    const evidence = document.createElement('td'); evidence.className = 'binary-string-cell'; evidence.textContent = item.evidence;
+                    const note = document.createElement('td'); note.textContent = item.note;
+                    row.append(area, indicator, offset, evidence, note); binaryTraceBody.appendChild(row);
+                }
+            }
+            binaryTraceCount.textContent = `${binaryTraceHints.length.toLocaleString()} indicators`;
+            binaryTraceMeta.textContent = `${binaryTraceHints.length.toLocaleString()} static indicator match(es) found in printable strings. File offsets identify where the evidence was stored, not when a call occurred.`;
+        }
+
+        function renderBinaryHex(offset = 0) {
+            if (!binaryBytes) {
+                binaryHexOutput.textContent = 'Load and analyze a binary to view its bytes.';
+                document.getElementById('binary-hex-range').textContent = '0 bytes';
+                return;
+            }
+            const length = binaryBytes.length;
+            const maxStart = Math.max(0, Math.floor(Math.max(0, length - 1) / BINARY_HEX_PAGE_BYTES) * BINARY_HEX_PAGE_BYTES);
+            binaryHexOffset = Math.max(0, Math.min(Number.isFinite(offset) ? offset : 0, maxStart));
+            binaryHexOffset = Math.floor(binaryHexOffset / 16) * 16;
+            const end = Math.min(length, binaryHexOffset + BINARY_HEX_PAGE_BYTES);
+            const lines = [];
+            for (let lineStart = binaryHexOffset; lineStart < end; lineStart += 16) {
+                const chunkEnd = Math.min(end, lineStart + 16);
+                const hexParts = [];
+                let ascii = '';
+                for (let i = lineStart; i < lineStart + 16; i++) {
+                    if (i < chunkEnd) {
+                        const value = binaryBytes[i];
+                        hexParts.push(value.toString(16).padStart(2, '0'));
+                        ascii += value >= 0x20 && value <= 0x7e ? String.fromCharCode(value) : '.';
+                    } else {
+                        hexParts.push('  '); ascii += ' ';
+                    }
+                    if ((i - lineStart) % 8 === 7) hexParts.push('');
+                }
+                const bytesField = hexParts.join(' ').replace(/\s+$/, '').padEnd(49, ' ');
+                lines.push(`${binaryHex(lineStart).slice(2).padStart(8, '0')}  ${bytesField}  |${ascii}|`);
+            }
+            binaryHexOutput.textContent = lines.join('\n') || '(empty file)';
+            binaryHexOffsetInput.value = binaryHex(binaryHexOffset);
+            document.getElementById('binary-hex-range').textContent = `${binaryHex(binaryHexOffset)}–${binaryHex(Math.max(binaryHexOffset, end - 1))} / ${formatBinarySize(length)}`;
+            document.getElementById('binary-hex-prev').disabled = binaryHexOffset <= 0;
+            document.getElementById('binary-hex-next').disabled = end >= length;
+        }
+
+        function showBinaryView(viewName) {
+            document.querySelectorAll('.binary-view-btn').forEach(button => {
+                const active = button.dataset.binaryView === viewName;
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            document.querySelectorAll('#binary-lab-panel .binary-view').forEach(panel => {
+                const active = panel.id === `binary-view-${viewName}`;
+                panel.classList.toggle('active', active);
+                panel.hidden = !active;
+            });
+        }
+
+        function downloadBinaryArtifact(content, filename, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a'); link.href = url; link.download = filename;
+            document.body.appendChild(link); link.click(); link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function binaryCsvCell(value) {
+            return `"${String(value ?? '').replace(/"/g, '""')}"`;
+        }
+
+        binaryFileInput.addEventListener('change', event => selectBinaryFile(event.target.files && event.target.files[0]));
+        binaryAnalyzeBtn.addEventListener('click', analyzeBinaryFile);
+        ['dragenter', 'dragover'].forEach(name => binaryDropzone.addEventListener(name, event => { event.preventDefault(); binaryDropzone.classList.add('is-dragover'); }));
+        ['dragleave', 'drop'].forEach(name => binaryDropzone.addEventListener(name, event => { event.preventDefault(); binaryDropzone.classList.remove('is-dragover'); }));
+        binaryDropzone.addEventListener('drop', event => {
+            const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+            if (file) selectBinaryFile(file);
+            if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 1) setBinaryStatus('Only the first dropped file was selected. Analyze files one at a time in this workbench.', 'warn');
+        });
+        binaryDropzone.addEventListener('click', () => binaryFileInput.click());
+        binaryDropzone.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); binaryFileInput.click(); } });
+        document.querySelectorAll('.binary-view-btn').forEach(button => button.addEventListener('click', () => showBinaryView(button.dataset.binaryView)));
+        binaryStringSearch.addEventListener('input', () => { binaryRenderedStringCount = BINARY_STRING_PAGE; renderBinaryStrings(); });
+        ['binary-show-ascii', 'binary-show-utf16le', 'binary-show-utf16be'].forEach(id => document.getElementById(id).addEventListener('change', () => { binaryRenderedStringCount = BINARY_STRING_PAGE; renderBinaryStrings(); }));
+        binaryLoadMore.addEventListener('click', () => { binaryRenderedStringCount += BINARY_STRING_PAGE; renderBinaryStrings(); });
+        document.getElementById('binary-hex-jump').addEventListener('click', () => {
+            const raw = binaryHexOffsetInput.value.trim();
+            const offset = /^0x/i.test(raw) ? parseInt(raw.slice(2), 16) : Number(raw);
+            if (!Number.isFinite(offset) || offset < 0) { setBinaryStatus('Invalid hex-view offset. Use a non-negative decimal offset or a value such as 0x120.', 'warn'); return; }
+            showBinaryView('hex'); renderBinaryHex(Math.floor(offset));
+        });
+        document.getElementById('binary-hex-prev').addEventListener('click', () => renderBinaryHex(binaryHexOffset - BINARY_HEX_PAGE_BYTES));
+        document.getElementById('binary-hex-next').addEventListener('click', () => renderBinaryHex(binaryHexOffset + BINARY_HEX_PAGE_BYTES));
+        document.getElementById('binary-export-strings').addEventListener('click', () => {
+            if (!binaryStrings.length) return;
+            const content = binaryStrings.map(item => `${binaryHex(item.offset)}\t${item.encoding}\t${item.text.replace(/[\r\n]+/g, ' ')}`).join('\n');
+            downloadBinaryArtifact(content, `${(binarySelectedFile?.name || 'binary').replace(/[^a-z0-9._-]/gi, '_')}.strings.txt`, 'text/plain;charset=utf-8');
+        });
+        document.getElementById('binary-export-trace').addEventListener('click', () => {
+            if (!binaryTraceHints.length) return;
+            const rows = [['area', 'indicator', 'offset_hex', 'offset_decimal', 'encoding', 'evidence', 'interpretation'], ...binaryTraceHints.map(item => [item.area, item.indicator, binaryHex(item.offset), item.offset, item.encoding, item.evidence, item.note])];
+            downloadBinaryArtifact(rows.map(row => row.map(binaryCsvCell).join(',')).join('\r\n'), `${(binarySelectedFile?.name || 'binary').replace(/[^a-z0-9._-]/gi, '_')}.trace-hints.csv`, 'text/csv;charset=utf-8');
+        });
+
 
         // Initial state
         fileInput.accept = '';
